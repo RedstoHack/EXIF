@@ -41,7 +41,7 @@
 <div class="wrap">
   <header>
     <div><h2 style="margin:0;">LocalMeta Forensic</h2><small style="color:var(--muted)">PDF Fonts/Engine • EXIF/XMP/Thumbnail • C2PA/AI • Office</small></div>
-    <div class="badge" id="libStatus">⏳ Подключение модулей...</div>
+    <div class="badge" id="libStatus">⏳ Инициализация...</div>
   </header>
   <label class="drop" id="drop" for="inp">
     <div style="font-size:16px; font-weight:600;">Выберите один или несколько файлов</div>
@@ -74,30 +74,32 @@
 var S = { file: null, buf: null, ext: "", tab: "gen", meta: { gen: {}, c2pa: null, sig: Array.of(), emb: Array.of() }, raw: {}, batchZip: null };
 function $(id) { return document.getElementById(id); }
 
-function loadFallback(urls) {
+function loadWithTimeout(url, ms) {
   return new Promise(function(resolve) {
-    var i = 0;
-    function next() {
-      if (i >= urls.length) return resolve(false);
-      var s = document.createElement("script");
-      s.src = urls.at(i); i = i + 1;
-      s.onload = function() { resolve(true); };
-      s.onerror = function() { s.remove(); next(); };
-      document.head.appendChild(s);
-    }
-    next();
+    var done = false;
+    var timer = setTimeout(function() { if (!done) { done = true; resolve(false); } }, ms);
+    var s = document.createElement("script");
+    s.src = url;
+    s.onload = function() { if (!done) { done = true; clearTimeout(timer); resolve(true); } };
+    s.onerror = function() { if (!done) { done = true; clearTimeout(timer); resolve(false); } };
+    document.head.appendChild(s);
   });
 }
 
-Promise.all(Array.of(
-  loadFallback(Array.of("https://cloudflare.com", "https://jsdelivr.net")),
-  loadFallback(Array.of("https://cloudflare.com", "https://jsdelivr.net")),
-  loadFallback(Array.of("https://cloudflare.com", "https://jsdelivr.net")),
-  loadFallback(Array.of("https://cloudflare.com", "https://jsdelivr.net"))
-)).then(function(res) {
+(async function initLibs() {
+  if (location.protocol === "file:" || !navigator.onLine) {
+    $("libStatus").textContent = "🔒 Автономный локальный движок готов";
+    return;
+  }
+  var res = await Promise.all(Array.of(
+    loadWithTimeout("https://cloudflare.com", 2500),
+    loadWithTimeout("https://cloudflare.com", 2500),
+    loadWithTimeout("https://cloudflare.com", 2500),
+    loadWithTimeout("https://cloudflare.com", 2500)
+  ));
   var ok = res.filter(Boolean).length;
-  $("libStatus").textContent = ok === 4 ? "🔒 Все модули активны" : "⚠️ Автономный режим (" + ok + "/4)";
-});
+  $("libStatus").textContent = ok === 4 ? "🔒 Все модули активны" : "🔒 Автономный движок готов (" + ok + "/4 CDN)";
+})();
 
 $("drop").ondragover = function(e) { e.preventDefault(); $("drop").classList.add("drag"); };
 $("drop").ondragleave = function() { $("drop").classList.remove("drag"); };
@@ -120,7 +122,10 @@ function routeFiles(list) {
 }
 
 async function handleBatch(list) {
-  if (!window.JSZip) return alert("Для ZIP-архива нужна библиотека JSZip.");
+  if (!window.JSZip) {
+    alert("В автономном режиме без интернета пакетный ZIP недоступен. Выберите 1 файл для мгновенной очистки.");
+    return;
+  }
   $("batchBox").style.display = "block";
   $("batchDownload").style.display = "none";
   $("batchLog").innerHTML = "Обработка " + list.length + " файлов...<br>";
@@ -226,7 +231,6 @@ async function parsePDF(bytes) {
       if (pdf.getProducer()) S.meta.gen["PDF_Engine (Producer)"] = pdf.getProducer();
       if (pdf.getCreationDate()) S.meta.gen["Creation_Date"] = pdf.getCreationDate().toISOString();
       if (pdf.getModificationDate()) S.meta.gen["Modification_Date"] = pdf.getModificationDate().toISOString();
-      $("prev").innerHTML = "<div class='note'>PDF (" + pdf.getPageCount() + " стр.). Все поля и шрифты извлечены.</div>";
     } catch (e) {}
   }
 
@@ -240,6 +244,7 @@ async function parsePDF(bytes) {
   if (rawStr.includes("/EmbeddedFile")) S.meta.emb.push("⚠️ Обнаружены скрытые вложенные файлы (/EmbeddedFile)");
   if (rawStr.includes("/URI")) S.meta.emb.push("В документе присутствуют внешние ссылки (/URI)");
   if (rawStr.includes("/Type /Sig") || rawStr.includes("/Type/Sig")) S.meta.sig.push({ signer: "Подпись PDF", raw: "Обнаружен словарь цифровой подписи /Sig" });
+  $("prev").innerHTML = "<div class='note'>PDF разобран. Все поля, шрифты и скрытые объекты извлечены.</div>";
 }
   function detectC2PA(bytes) {
   var txt = new TextDecoder("latin1").decode(bytes);
@@ -330,7 +335,7 @@ function extractWebpChunks(buf, bytes) {
 }
 
 async function parseOffice() {
-  if (!window.JSZip) return alert("Для документов Office нужна библиотека JSZip.");
+  if (!window.JSZip) return alert("Для документов Office нужна библиотека JSZip (откройте файл через интернет-браузер).");
   var zip = await JSZip.loadAsync(S.buf);
   S.raw.zip = zip;
   var parser = new DOMParser();
@@ -405,6 +410,30 @@ $("purge").onclick = function() {
   S.meta.gen = {}; S.meta.c2pa = null; S.meta.sig = Array.of(); draw();
 };
 
+function cleanPdfOffline(buf) {
+  var str = new TextDecoder("latin1").decode(new Uint8Array(buf));
+  var tags = Array.of("/Producer", "/Creator", "/Author", "/Title", "/Subject", "/Keywords", "/CreationDate", "/ModDate");
+  for (var i = 0; i < tags.length; i++) {
+    var key = tags.at(i), pos = 0;
+    while (true) {
+      var idx = str.indexOf(key, pos);
+      if (idx === -1) break;
+      var p1 = str.indexOf("(", idx + key.length);
+      var p2 = p1 !== -1 ? str.indexOf(")", p1 + 1) : -1;
+      if (p1 !== -1 && p2 !== -1 && p1 - idx < 20) {
+        var spaces = " ".repeat(p2 - p1 - 1);
+        str = str.slice(0, p1 + 1) + spaces + str.slice(p2);
+        pos = p2 + 1;
+      } else {
+        pos = idx + key.length;
+      }
+    }
+  }
+  var out = new Uint8Array(str.length);
+  for (var j = 0; j < str.length; j++) out.set(Array.of(str.charCodeAt(j)), j);
+  return new Blob(Array.of(out), { type: "application/pdf" });
+}
+
 async function quickClean(file) {
   var buf = await file.arrayBuffer();
   var ext = file.name.split(".").pop().toLowerCase();
@@ -418,12 +447,16 @@ async function quickClean(file) {
     blob = new Blob(Array.of(new Uint8Array(Array.of(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))).concat(keep.map(function(c) { return c.raw; })), { type: "image/png" });
   } else if (ext === "webp") {
     blob = buildWebpBlob(extractWebpChunks(buf, bytes).filter(function(c) { return !Array.of("EXIF", "XMP ", "ICCP").includes(c.type); }));
-  } else if (ext === "pdf" && window.PDFLib) {
-    var pdf = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
-    var out = await PDFLib.PDFDocument.create();
-    var pages = await out.copyPages(pdf, pdf.getPageIndices());
-    pages.forEach(function(p) { out.addPage(p); });
-    blob = new Blob(Array.of(await out.save()), { type: "application/pdf" });
+  } else if (ext === "pdf") {
+    if (window.PDFLib) {
+      var pdf = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
+      var out = await PDFLib.PDFDocument.create();
+      var pages = await out.copyPages(pdf, pdf.getPageIndices());
+      pages.forEach(function(p) { out.addPage(p); });
+      blob = new Blob(Array.of(await out.save()), { type: "application/pdf" });
+    } else {
+      blob = cleanPdfOffline(buf);
+    }
   } else {
     blob = new Blob(Array.of(buf));
   }
@@ -449,16 +482,20 @@ $("save").onclick = async function() {
     blob = new Blob(Array.of(new Uint8Array(Array.of(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))).concat(keep.map(function(c) { return c.raw; })), { type: "image/png" });
   } else if (S.ext === "webp") {
     blob = buildWebpBlob(S.raw.chunks.filter(function(c) { return !Array.of("EXIF", "XMP ", "ICCP").includes(c.type); }));
-  } else if (S.ext === "pdf" && window.PDFLib && S.raw.pdf) {
-    var out = await PDFLib.PDFDocument.create();
-    var pages = await out.copyPages(S.raw.pdf, S.raw.pdf.getPageIndices());
-    pages.forEach(function(p) { out.addPage(p); });
-    var g = S.meta.gen;
-    if (g.Title) out.setTitle(g.Title);
-    if (g.Author) out.setAuthor(g.Author);
-    if (g.Creator) out.setCreator(g.Creator);
-    if (g["PDF_Engine (Producer)"]) out.setProducer(g["PDF_Engine (Producer)"]);
-    blob = new Blob(Array.of(await out.save()), { type: "application/pdf" });
+  } else if (S.ext === "pdf") {
+    if (window.PDFLib && S.raw.pdf) {
+      var out = await PDFLib.PDFDocument.create();
+      var pages = await out.copyPages(S.raw.pdf, S.raw.pdf.getPageIndices());
+      pages.forEach(function(p) { out.addPage(p); });
+      var g = S.meta.gen;
+      if (g.Title) out.setTitle(g.Title);
+      if (g.Author) out.setAuthor(g.Author);
+      if (g.Creator) out.setCreator(g.Creator);
+      if (g["PDF_Engine (Producer)"]) out.setProducer(g["PDF_Engine (Producer)"]);
+      blob = new Blob(Array.of(await out.save()), { type: "application/pdf" });
+    } else {
+      blob = cleanPdfOffline(S.buf);
+    }
   } else if (Array.of("docx", "xlsx", "pptx").includes(S.ext) && window.JSZip && S.raw.zip) {
     var zip = S.raw.zip;
     if (!S.meta.sig.length) Object.keys(zip.files).forEach(function(p) { if (p.startsWith("_xmlsignatures/")) zip.remove(p); });
