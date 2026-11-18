@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta http-equiv="Content-Security-Policy" content="default-src 'none';script-src 'unsafe-inline';style-src 'unsafe-inline';img-src blob:;connect-src 'none';form-action 'none';base-uri 'none'"><meta name="referrer" content="no-referrer"><title>Grim_ExifCleaner — очистка метаданных локально</title>
+<style>
+*{box-sizing:border-box}body{margin:0;font:14px/1.45 system-ui,sans-serif;background:#0f1115;color:#e8eaf0}
+main{max-width:980px;margin:0 auto;padding:24px 16px}
+h1{margin:0 0 4px;font-size:26px}h1 b{color:#ff4d5e}.sub{color:#8b92a5;margin:0 0 18px}
+#drop{border:2px dashed #3a4050;border-radius:14px;padding:36px;text-align:center;cursor:pointer;background:#151820}
+#drop.on{border-color:#ff4d5e;background:#1d1a20}
+.card{background:#181b22;border:1px solid #2a2f3a;border-radius:12px;margin:16px 0;padding:14px}
+.top{display:flex;gap:8px;align-items:center;flex-wrap:wrap}.top h3{margin:0;flex:1;word-break:break-all;font-size:15px}
+.tag{background:#2a2f3a;border-radius:6px;padding:2px 8px;font-size:12px;color:#aab}
+button{background:#2a2f3a;color:#fff;border:0;border-radius:8px;padding:8px 14px;cursor:pointer;font:inherit}
+button.red{background:#ff4d5e}button:hover{filter:brightness(1.15)}
+table{width:100%;border-collapse:collapse;margin-top:10px}
+td{padding:4px 6px;border-top:1px solid #23272f;vertical-align:top}
+tr.g td{background:#1f232c;font-weight:600;color:#ff9aa5;border-top:0}
+td.k{width:28%;color:#8b92a5;word-break:break-all}td.x{width:40px;text-align:center}
+input[type=text]{width:100%;background:#0f1115;color:#fff;border:1px solid #2a2f3a;border-radius:6px;padding:5px 8px;font:inherit}
+.v{word-break:break-word;white-space:pre-wrap}.warn{color:#ffb454}.note{color:#8b92a5;font-size:12px;margin-top:20px}
+.th{width:48px;height:48px;object-fit:cover;border-radius:8px}label.o{display:block;margin-top:10px;color:#8b92a5}
+</style></head><body><main>
+<h1>Grim_<b>ExifCleaner</b></h1>
+<p class="sub">Просмотр, правка и удаление метаданных. Всё выполняется в вашем браузере — файлы никуда не отправляются.</p>
+<div id="drop">Перетащите файл сюда или нажмите для выбора (один файл за раз)<br><small style="color:#8b92a5">JPEG · PNG · WebP · TIFF · PDF · DOCX · XLSX · PPTX</small></div>
+<input id="inp" type="file" hidden>
+<label class="o"><input type="checkbox" id="ori" checked> При полной очистке JPEG сохранять ориентацию (иначе фото может «лечь на бок»)</label>
+
+<div id="list"></div>
+<p class="note">Отметка «×» в строке = удалить поле, текстовое поле = изменить значение (для GPS формат «широта, долгота»; пусто = удалить). Очистка PDF/Office/TIFF не меняет размер файла структуры: значения затираются на месте. Цифровые подписи и C2PA не проверяются; после изменений они недействительны. Старые ревизии PDF и метаданные внутри сжатых потоков PDF не затрагиваются.</p>
+</main>
+<script>
+const $=s=>document.querySelector(s),enc=new TextEncoder(),dec=new TextDecoder(),lat=new TextDecoder('latin1');
+const cat=(...p)=>{const o=new Uint8Array(p.reduce((s,x)=>s+x.length,0));let i=0;for(const x of p){o.set(x,i);i+=x.length}return o};
+const crcT=(()=>{const t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=c&1?0xEDB88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();
+const crc=b=>{let c=-1;for(const x of b)c=crcT[(c^x)&255]^(c>>>8);return(~c)>>>0};
+const be32=(b,o)=>(b[o]<<24|b[o+1]<<16|b[o+2]<<8|b[o+3])>>>0;
+const inf=async(d,f='deflate-raw')=>new Uint8Array(await new Response(new Blob([d]).stream().pipeThrough(new DecompressionStream(f))).arrayBuffer());
+const strs=b=>[...new Set(lat.decode(b).match(/[ -~]{6,}/g)||[])].slice(0,40);
+const h=(t,a={},...c)=>{const e=Object.assign(document.createElement(t),a);e.append(...c);return e};
+const dl=(b,n)=>{const a=h('a',{href:URL.createObjectURL(new Blob([b])),download:n});a.click()};
+
+/* ---------- TIFF / EXIF ---------- */
+const TN={0x10E:'ImageDescription',0x10F:'Make',0x110:'Model',0x112:'Orientation',0x131:'Software',0x132:'DateTime',0x13B:'Artist',0x8298:'Copyright',0x700:'XMP',0x829A:'ExposureTime',0x829D:'FNumber',0x8822:'ExposureProgram',0x8827:'ISO',0x9000:'ExifVersion',0x9003:'DateTimeOriginal',0x9004:'DateTimeDigitized',0x9010:'OffsetTime',0x9011:'OffsetTimeOriginal',0x9201:'ShutterSpeed',0x9202:'Aperture',0x9204:'ExposureComp',0x9207:'MeteringMode',0x9209:'Flash',0x920A:'FocalLength',0x927C:'MakerNote',0x9286:'UserComment',0x9290:'SubSecTime',0xA002:'Width',0xA003:'Height',0xA402:'ExposureMode',0xA403:'WhiteBalance',0xA420:'ImageUniqueID',0xA430:'CameraOwnerName',0xA431:'BodySerialNumber',0xA432:'LensSpecification',0xA433:'LensMake',0xA434:'LensModel',0xA435:'LensSerialNumber',0x83BB:'IPTC',0x1:'GPSLatRef',0x2:'GPSLatitude',0x3:'GPSLonRef',0x4:'GPSLongitude',0x5:'GPSAltRef',0x6:'GPSAltitude',0x7:'GPSTimeStamp',0x1D:'GPSDateStamp',0x1B:'GPSProcessingMethod'};
+const SZ=[0,1,1,2,4,8,1,1,2,4,8,4,8];
+function parseTiff(b){const dv=new DataView(b.buffer,b.byteOffset,b.byteLength),le=b[0]==73,g16=o=>dv.getUint16(o,le),g32=o=>dv.getUint32(o,le),I={};
+ const rd=(off,name)=>{if(off<8||off+2>b.length||I[name])return;const n=g16(off),L=I[name]=[];
+  for(let i=0;i<n;i++){const e=off+2+i*12;if(e+12>b.length)break;const tag=g16(e),type=g16(e+2),count=g32(e+4),len=(SZ[type]||1)*count,vo=len>4?g32(e+8):e+8;
+   if(vo+len>b.length)continue;L.push({tag,type,count,vo,raw:b.slice(vo,vo+len)});
+   if(name=='IFD0'&&tag==0x8769)rd(g32(e+8),'EXIF');if(name=='IFD0'&&tag==0x8825)rd(g32(e+8),'GPS')}};
+ rd(g32(4),'IFD0');return{le,I}}
+const nums=(e,le)=>{const d=new DataView(e.raw.buffer,e.raw.byteOffset,e.raw.byteLength),t=e.type,a=[];
+ for(let i=0;i<e.count&&i<12;i++)a.push(t==5?d.getUint32(i*8,le)/(d.getUint32(i*8+4,le)||1):t==10?d.getInt32(i*8,le)/(d.getInt32(i*8+4,le)||1):t==3?d.getUint16(i*2,le):t==8?d.getInt16(i*2,le):t==4?d.getUint32(i*4,le):t==9?d.getInt32(i*4,le):d.getUint8(i));return a};
+const fv=(e,le)=>{if(e.type==2)return dec.decode(e.raw).replace(/\0+$/,'');if(e.tag==0x9286)return dec.decode(e.raw.slice(8)).replace(/\0/g,'');
+ if(e.tag==0x9000)return lat.decode(e.raw);if(e.type==7||(e.type==1&&e.count>12)||e.tag==0x927C)return`[${e.raw.length} байт]`;
+ return nums(e,le).map(x=>Math.round(x*1e6)/1e6).join(', ')+(e.count>12?'…':'')};
+function exifRows(p,mode){const R=[],{I,le}=p,G={IFD0:'EXIF · Основные',EXIF:'EXIF · Съёмка',GPS:'EXIF · GPS'};
+ for(const n of['IFD0','EXIF','GPS'])for(const e of I[n]||[]){
+  if(n=='IFD0'&&(e.tag==0x8769||e.tag==0x8825))continue;if(n=='GPS'&&e.tag>=1&&e.tag<=4)continue;
+  const ed=mode!='ro'&&e.type==2&&n!='GPS';
+  R.push({id:({IFD0:'a',EXIF:'e',GPS:'g'})[n]+e.tag,g:G[n],max:mode=='tiff'?e.raw.length-1:0,k:TN[e.tag]||'0x'+e.tag.toString(16),v:fv(e,le),ctl:ed?'edit':mode=='ro'||n=='GPS'||(mode=='tiff'&&![0x700,0x83BB,0x8649,0x927C,0x9286].includes(e.tag))?'info':'del'})}
+ const g=I.GPS||[],f=t=>g.find(x=>x.tag==t);
+ if(f(2)&&f(4)){const c=(t,r)=>{const v=nums(f(t),le),d=v[0]+v[1]/60+v[2]/3600;return+(d*(['S','W'].includes(String.fromCharCode(f(r)?.raw[0]))?-1:1)).toFixed(6)};
+  R.push({id:'gps',g:G.GPS,k:'Координаты',v:c(2,1)+', '+c(4,3),ctl:mode=='full'?'edit':mode=='ro'?'info':'del'})}
+ return R}
+function gpsTags(s,le){const m=s.match(/(-?\d+(?:\.\d+)?)\s*[,; ]\s*(-?\d+(?:\.\d+)?)/);if(!m)return[];
+ const r=x=>{x=Math.abs(x);const d=Math.floor(x),mi=Math.floor((x-d)*60),sc=Math.round(((x-d)*60-mi)*60*1e4),raw=new Uint8Array(24),v=new DataView(raw.buffer);[d,1,mi,1,sc,1e4].forEach((q,i)=>v.setUint32(i*4,q,le));return raw};
+ const A=(tag,c)=>({tag,type:2,count:2,raw:new Uint8Array([c.charCodeAt(0),0])}),R=(tag,x)=>({tag,type:5,count:3,raw:r(x)}),la=+m[1],lo=+m[2];
+ return[A(1,la<0?'S':'N'),R(2,la),A(3,lo<0?'W':'E'),R(4,lo)]}
+const ifdSize=e=>2+e.length*12+4+e.reduce((s,x)=>s+(x.raw.length>4?x.raw.length+1&~1:0),0);
+function ifdBytes(e,base,le){e=[...e].sort((a,b)=>a.tag-b.tag);const t=new Uint8Array(ifdSize(e)),dv=new DataView(t.buffer);dv.setUint16(0,e.length,le);let dp=2+e.length*12+4;
+ e.forEach((x,i)=>{const o=2+i*12;dv.setUint16(o,x.tag,le);dv.setUint16(o+2,x.type,le);dv.setUint32(o+4,x.count,le);
+  if(x.raw.length>4){dv.setUint32(o+8,base+dp,le);t.set(x.raw,dp);dp+=x.raw.length+1&~1}else t.set(x.raw,o+8)});return t}
+function buildExif(p,ed){const{le,I}=p;
+ const ap=(L,pre,skip)=>(L||[]).filter(x=>!skip.includes(x.tag)).flatMap(x=>{const id=pre+x.tag;if(!(id in ed))return[x];const s=ed[id];if(s===null||s==='')return[];if(x.type!=2)return[x];const raw=enc.encode(s+'\0');return[{tag:x.tag,type:2,count:raw.length,raw}]});
+ const i0=ap(I.IFD0,'a',[0x8769,0x8825,0x14A,0x201,0x202,0x2BC,0x83BB,0x8649]),ex=ap(I.EXIF,'e',[0x927C,0xA005]);
+ let gp=I.GPS||[];if('gps' in ed)gp=ed.gps?gpsTags(ed.gps,le):[];
+ const pt=(tag)=>({tag,type:4,count:1,raw:new Uint8Array(4)});const e0=[...i0];if(ex.length)e0.push(pt(0x8769));if(gp.length)e0.push(pt(0x8825));
+ if(!e0.length)return null;const oEx=8+ifdSize(e0),oG=oEx+(ex.length?ifdSize(ex):0);
+ for(const x of e0){const v=x.tag==0x8769?oEx:x.tag==0x8825?oG:null;if(v!=null)new DataView(x.raw.buffer).setUint32(0,v,le)}
+ const hd=new Uint8Array(le?[73,73,42,0,8,0,0,0]:[77,77,0,42,0,0,0,8]);
+ return cat(hd,ifdBytes(e0,8,le),ex.length?ifdBytes(ex,oEx,le):new Uint8Array(),gp.length?ifdBytes(gp,oG,le):new Uint8Array())}
+
+/* ---------- общие помощники ---------- */
+const xmpRows=t=>{const R=[];for(const m of t.matchAll(/\b([A-Za-z]+:[A-Za-z]+)="([^"]*)"|<([A-Za-z]+:[A-Za-z]+)[^>]*>([^<]+)</g)){const k=m[1]||m[3],v=m[2]||m[4];if(v.trim()&&!k.startsWith('xmlns'))R.push({g:'XMP',k,v,ctl:'info'})}return R.slice(0,80)};
+const IP={5:'Название',25:'Ключевое слово',80:'Автор',85:'Должность автора',90:'Город',92:'Район',95:'Регион',101:'Страна',105:'Заголовок',110:'Кредит',115:'Источник',116:'Копирайт',120:'Описание'};
+const iptcRows=b=>{const R=[];for(let i=0;i<b.length-5;i++)if(b[i]==0x1C&&b[i+1]==2&&IP[b[i+2]]){const L=b[i+3]<<8|b[i+4];R.push({g:'IPTC',k:IP[b[i+2]],v:dec.decode(b.subarray(i+5,i+5+L)),ctl:'info'});i+=4+L}return R};
+const c2paRow=(d,id)=>{const s=strs(d).join('\n');return{id,g:'C2PA / учётные данные',k:'Блок C2PA (JUMBF)',v:(/AlgorithmicMedia/.test(s)?'⚠ Метка ИИ-генерации найдена\n':'')+s,ctl:'del'}};
+
+/* ---------- JPEG ---------- */
+async function jpg(b){const S=[];let i=2;while(i+4<=b.length&&b[i]==255&&b[i+1]!=0xDA){const L=b[i+2]<<8|b[i+3];S.push({m:b[i+1],d:b.slice(i+4,i+2+L)});i+=2+L}const tail=b.slice(i),eoi=(()=>{for(let j=0;j<tail.length-1;j++)if(tail[j]==255&&tail[j+1]==0xD9)return j+2;return tail.length})();
+ const hd=s=>lat.decode(s.d.subarray(0,30)),kind=s=>s.m==0xE1&&hd(s).startsWith('Exif\0\0')?'exif':s.m==0xE1&&hd(s).startsWith('http://ns.adobe.com/x')?'xmp':s.m==0xED?'iptc':s.m==0xEB?'c2pa':s.m==0xFE?'com':s.m>=0xE1&&s.m<=0xEF&&s.m!=0xEE&&!(s.m==0xE2&&hd(s).startsWith('ICC_'))?'other':'';
+ const R=[];let P,xt='',ip=[],c2=[];
+ S.forEach((s,n)=>{const k=kind(s);if(k=='exif'){P=parseTiff(s.d.slice(6));R.push(...exifRows(P,'full'))}
+  else if(k=='xmp')xt+=dec.decode(s.d);else if(k=='iptc')ip.push(s.d);else if(k=='c2pa')c2.push(s.d);
+  else if(k=='com')R.push({id:'com'+n,g:'Комментарий JPEG',k:'COM',v:dec.decode(s.d),ctl:'del'});else if(k=='other')R.push({id:'oth'+n,g:'Прочие блоки JPEG',k:'APP'+(s.m-0xE0)+' '+hd(s).split('\0')[0].replace(/[^ -~]/g,''),v:'['+s.d.length+' байт] '+strs(s.d).slice(0,4).join(' | '),ctl:'del'})});
+ if(xt){R.push({id:'xmp',g:'XMP',k:'Блок XMP',v:'удалить весь блок',ctl:'del'},...xmpRows(xt))}
+ if(ip.length){R.push({id:'iptc',g:'IPTC',k:'Блок IPTC',v:'удалить весь блок',ctl:'del'},...ip.flatMap(iptcRows))}
+ if(c2.length)R.push(c2paRow(cat(...c2),'c2pa'));if(tail.length>eoi)R.push({id:'trail',g:'Скрытые данные',k:'После конца изображения',v:'['+(tail.length-eoi)+' байт] '+strs(tail.slice(eoi)).slice(0,3).join(' | '),ctl:'del'});
+ return{rows:R,build(ed){const o=[new Uint8Array([255,216])];
+  S.forEach((s,n)=>{const k=kind(s);let d=s.d;
+   if(k=='exif'){const x=ed?buildExif(P,ed):($('#ori').checked&&(P.I.IFD0||[]).some(t=>t.tag==0x112)?buildExif({le:P.le,I:{IFD0:P.I.IFD0.filter(t=>t.tag==0x112)}},{}):null);if(!x)return;d=cat(enc.encode('Exif\0\0'),x)}
+   else if(k&&(!ed||ed[k=='com'?'com'+n:k=='other'?'oth'+n:k]===null))return;
+   o.push(new Uint8Array([255,s.m,(d.length+2)>>8,(d.length+2)&255]),d)});
+  o.push(!ed||ed.trail===null?tail.slice(0,eoi):tail);return cat(...o)}}}
+
+/* ---------- PNG ---------- */
+async function png(b){const C=[];for(let i=8;i+12<=b.length;){const L=be32(b,i);C.push({t:lat.decode(b.subarray(i+4,i+8)),d:b.subarray(i+8,i+8+L)});if(C[C.length-1].t=='IEND')break;i+=12+L}
+ const R=[],M=['tEXt','zTXt','iTXt','eXIf','tIME','caBX'],WLP=['IHDR','PLTE','IDAT','IEND','tRNS','gAMA','cHRM','sRGB','iCCP','sBIT','cICP','bKGD','acTL','fcTL','fdAT'];
+ for(let n=0;n<C.length;n++){const c=C[n],d=c.d,id='c'+n,j=d.indexOf(0);
+  try{if(c.t=='tEXt'){c.key=lat.decode(d.subarray(0,j));R.push({id,g:'PNG · Текст',k:c.key,v:dec.decode(d.subarray(j+1)),ctl:'edit'})}
+  else if(c.t=='zTXt'){c.key=lat.decode(d.subarray(0,j));R.push({id,g:'PNG · Текст',k:c.key,v:dec.decode(await inf(d.subarray(j+2),'deflate')),ctl:'edit'})}
+  else if(c.t=='iTXt'){c.key=lat.decode(d.subarray(0,j));const k2=d.indexOf(0,j+3),k3=d.indexOf(0,k2+1);let x=d.subarray(k3+1);if(d[j+1])x=await inf(x,'deflate');R.push({id,g:'PNG · Текст / XMP',k:c.key,v:dec.decode(x),ctl:'edit'})}
+  else if(c.t=='eXIf'){R.push({id,g:'PNG · EXIF',k:'Блок EXIF',v:'удалить весь блок',ctl:'del'},...exifRows(parseTiff(d),'ro'))}
+  else if(c.t=='tIME')R.push({id,g:'PNG · Время',k:'tIME',v:(d[0]<<8|d[1])+'-'+d[2]+'-'+d[3]+' '+d[4]+':'+d[5]+':'+d[6],ctl:'del'});
+  else if(c.t=='caBX')R.push(c2paRow(d,id));else if(!WLP.includes(c.t))R.push({id,g:'PNG · Прочие блоки',k:c.t,v:'['+d.length+' байт] '+strs(d).slice(0,3).join(' | '),ctl:'del'})}catch(e){}}
+ return{rows:R,build(ed){const o=[b.slice(0,8)];
+  const mk=(t,d)=>{const x=cat(enc.encode(t),d),a=new Uint8Array(4),z=new Uint8Array(4);new DataView(a.buffer).setUint32(0,d.length);new DataView(z.buffer).setUint32(0,crc(x));return cat(a,x,z)};
+  C.forEach((c,n)=>{if(!ed){if(WLP.includes(c.t))o.push(mk(c.t,c.d));return}const v=ed['c'+n];if(v===null)return;if(!M.includes(c.t)){o.push(mk(c.t,c.d));return}
+   if(typeof v=='string'&&c.key!=null)o.push(mk('iTXt',cat(enc.encode(c.key),new Uint8Array(5),enc.encode(v))));else o.push(mk(c.t,c.d))});
+  return cat(...o)}}}
+
+/* ---------- WebP ---------- */
+async function webp(b){const C=[];for(let i=12,E=Math.min(b.length,8+((b[4]|b[5]<<8|b[6]<<16|b[7]<<24)>>>0));i+8<=E;){const L=(b[i+4]|b[i+5]<<8|b[i+6]<<16|b[i+7]<<24)>>>0;C.push({t:lat.decode(b.subarray(i,i+4)),d:b.subarray(i+8,i+8+L)});i+=8+L+(L&1)}
+ const R=[];for(const c of C){const id=c.t;
+  if(id=='EXIF'){let d=c.d;if(lat.decode(d.subarray(0,4))=='Exif')d=d.slice(6);R.push({id,g:'WebP · EXIF',k:'Блок EXIF',v:'удалить весь блок',ctl:'del'});try{R.push(...exifRows(parseTiff(d),'ro'))}catch(e){}}
+  else if(id=='XMP '){R.push({id,g:'XMP',k:'Блок XMP',v:'удалить весь блок',ctl:'del'},...xmpRows(dec.decode(c.d)))}
+  else if(id=='C2PA')R.push(c2paRow(c.d,id))}
+ return{rows:R,build(ed){const dr=t=>!ed||ed[t]===null,o=[];
+  for(const c of C){if(!ed?!['VP8 ','VP8L','VP8X','ALPH','ANIM','ANMF','ICCP'].includes(c.t):['EXIF','XMP ','C2PA'].includes(c.t)&&dr(c.t))continue;let d=c.d;
+   if(c.t=='VP8X'){d=d.slice();if(dr('EXIF'))d[0]&=~8;if(dr('XMP '))d[0]&=~4}
+   const hd=new Uint8Array(8);hd.set(enc.encode(c.t));new DataView(hd.buffer).setUint32(4,d.length,true);o.push(hd,d,new Uint8Array(d.length&1))}
+  const body=cat(enc.encode('WEBP'),...o),hd=cat(enc.encode('RIFF'),new Uint8Array(4));new DataView(hd.buffer).setUint32(4,body.length,true);return cat(hd,body)}}}
+
+/* ---------- TIFF ---------- */
+async function tif(b){const P=parseTiff(b),R=exifRows(P,'tiff');
+ return{rows:R,build(ed){const o=b.slice(),w=e=>o.fill(0,e.vo,e.vo+e.raw.length);
+  for(const n in P.I)for(const e of P.I[n]){const id=({IFD0:'a',EXIF:'e',GPS:'g'})[n]+e.tag;
+   if(!ed){if(e.type==2||n=='GPS'||[0x700,0x83BB,0x8649].includes(e.tag))w(e)}
+   else if(id in ed){const s=ed[id];if(s===null)w(e);else if(e.type==2){w(e);o.set(enc.encode(s).slice(0,e.raw.length-1),e.vo)}}}
+  if(ed&&ed.gps===null)(P.I.GPS||[]).forEach(w);return o}}}
+
+/* ---------- PDF (правка на месте, длина файла не меняется) ---------- */
+const u16=b=>new TextDecoder('utf-16be').decode(b);
+const hx=i=>{const by=Uint8Array.from(i.replace(/\s/g,'').match(/../g)||[],x=>parseInt(x,16));return by[0]==254&&by[1]==255?u16(by.slice(2)):lat.decode(by)};
+const pl=t=>{const u=t.replace(/\\([nrtbf()\\]|[0-7]{1,3})/g,(_,c)=>/^[0-7]+$/.test(c)?String.fromCharCode(parseInt(c,8)):({n:'\n',r:'\r',t:'\t',b:'\b',f:'\f'}[c]||c));return u.startsWith('\xFE\xFF')?u16(Uint8Array.from(u.slice(2),c=>c.charCodeAt(0))):u};
+const wr=(o,st,s)=>{for(let i=0;i<s.length;i++)o[st+i]=s.charCodeAt(i)&255};
+const scrubJ=o=>{for(let i=0;i+4<o.length;i++)if(o[i]==255&&o[i+1]==216&&o[i+2]==255){let j=i+2;while(j+4<o.length&&o[j]==255&&((o[j+1]>=0xE0&&o[j+1]<=0xEF)||o[j+1]==0xFE)){const m=o[j+1],L=o[j+2]<<8|o[j+3];if(m!=0xE0&&m!=0xE2&&m!=0xEE)o.fill(0,j+4,j+2+L);j+=2+L}}};
+async function pdf(b){const s=lat.decode(b),R=[],U=[],enc_=/\/Encrypt\b/.test(s);
+ if(enc_)R.push({g:'Предупреждение',k:'Шифрование',v:'PDF зашифрован — эта версия не может его обработать',ctl:'info'});
+ if(/\/ByteRange\b/.test(s))R.push({g:'Предупреждение',k:'Цифровая подпись',v:'Найдена подпись; после любых изменений она станет недействительной',ctl:'info'});
+ if(/\/ObjStm\b/.test(s))R.push({g:'Предупреждение',k:'Сжатые потоки',v:'Часть метаданных может быть внутри сжатых объектов — они не затрагиваются',ctl:'info'});
+ const re=/\/(Title|Author|Subject|Keywords|Creator|Producer|CreationDate|ModDate|Company|Manager)\s*(\((?:\\[\s\S]|[^\\)])*\)|<[0-9A-Fa-f\s]*>)/g;let m;
+ while(!enc_&&(m=re.exec(s))){const raw=m[2],st=m.index+m[0].length-raw.length,hex=raw[0]=='<',inner=raw.slice(1,-1),id='p'+st;
+  R.push({id,g:'Info-словарь PDF',k:m[1],v:hex?hx(inner):pl(inner),ctl:'edit',max:hex?Math.max(0,inner.replace(/\s/g,'').length/4-1)|0:inner.length});U.push({id,st:st+1,len:inner.length,hex})}
+ const xm=enc_?null:s.match(/<\?xpacket begin[\s\S]*?<\?xpacket end[^>]*\?>/);
+ if(xm)R.push({id:'xmp',g:'XMP',k:'Блок XMP',v:'стереть значения',ctl:'del'},...xmpRows(xm[0]));
+ const im=enc_?null:/\/ID\s*\[\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\]/.exec(s);
+ if(im)R.push({id:'pid',g:'Идентификатор документа',k:'/ID',v:im[1]+'\n'+im[2],ctl:'del'});
+ return{rows:R,build(ed){if(enc_)throw Error('PDF зашифрован');const o=b.slice();
+  for(const u of U){if(ed&&!(u.id in ed))continue;const t=ed?ed[u.id]??'':'';let v;
+   if(u.hex)v=('FEFF'+[...t].map(c=>c.charCodeAt(0).toString(16).padStart(4,'0')).join('')+'0020'.repeat(u.len)).slice(0,u.len);
+   else v=[...t].map(c=>c.charCodeAt(0)<256&&!'()\\'.includes(c)?c:'?').join('').slice(0,u.len).padEnd(u.len,' ');
+   wr(o,u.st,v)}
+  if(xm&&(!ed||ed.xmp===null))wr(o,xm.index,xm[0].replace(/>([^<>]+)</g,(a,t)=>'>'+' '.repeat(t.length)+'<').replace(/(\s(?!xmlns)\w+:\w+=")([^"]*)"/g,(a,p,v)=>p+' '.repeat(v.length)+'"'));
+  if(im&&(!ed||ed.pid===null))wr(o,im.index,im[0].replace(/<([0-9A-Fa-f]+)>/g,(a,x)=>'<'+'0'.repeat(x.length)+'>'));if(!ed)scrubJ(o);
+  return o}}}
+
+/* ---------- ZIP / Office ---------- */
+async function unzip(b){const dv=new DataView(b.buffer,b.byteOffset,b.byteLength);let e=b.length-22;while(e>=0&&dv.getUint32(e,true)!=0x06054b50)e--;if(e<0)throw Error('Не ZIP-архив');
+ const n=dv.getUint16(e+10,true);let p=dv.getUint32(e+16,true);const F=[];
+ for(let i=0;i<n;i++){const nl=dv.getUint16(p+28,true),el=dv.getUint16(p+30,true),cl=dv.getUint16(p+32,true),lo=dv.getUint32(p+42,true),csz=dv.getUint32(p+20,true);
+  const ds=lo+30+dv.getUint16(lo+26,true)+dv.getUint16(lo+28,true);
+  F.push({name:dec.decode(b.subarray(p+46,p+46+nl)),meth:dv.getUint16(p+10,true),crc:dv.getUint32(p+16,true),usz:dv.getUint32(p+24,true),raw:b.subarray(ds,ds+csz)});p+=46+nl+el+cl}return F}
+function zip(F){const P=[],CD=[];let o=0;
+ for(const f of F){const nm=enc.encode(f.name),hd=new Uint8Array(30+nm.length),d=new DataView(hd.buffer);
+  d.setUint32(0,0x04034b50,true);d.setUint16(4,20,true);d.setUint16(8,f.meth,true);d.setUint32(14,f.crc,true);d.setUint32(18,f.raw.length,true);d.setUint32(22,f.usz,true);d.setUint16(26,nm.length,true);hd.set(nm,30);P.push(hd,f.raw);
+  const c=new Uint8Array(46+nm.length),v=new DataView(c.buffer);v.setUint32(0,0x02014b50,true);v.setUint16(4,20,true);v.setUint16(6,20,true);v.setUint16(10,f.meth,true);v.setUint32(16,f.crc,true);v.setUint32(20,f.raw.length,true);v.setUint32(24,f.usz,true);v.setUint16(28,nm.length,true);v.setUint32(42,o,true);c.set(nm,46);CD.push(c);o+=hd.length+f.raw.length}
+ const cd=cat(...CD),end=new Uint8Array(22),v=new DataView(end.buffer);v.setUint32(0,0x06054b50,true);v.setUint16(8,F.length,true);v.setUint16(10,F.length,true);v.setUint32(12,cd.length,true);v.setUint32(16,o,true);return cat(...P,cd,end)}
+const leaves=d=>[...d.getElementsByTagName('*')].filter(e=>!e.children.length&&e.textContent.trim());
+async function office(b){const F=await unzip(b),DOC=['docProps/core.xml','docProps/app.xml','docProps/custom.xml'],P={},R=[],X=n=>{const f=F.find(x=>x.name==n);return f?f.meth?inf(f.raw).then(r=>dec.decode(r)):dec.decode(f.raw):null};
+ for(const n of DOC){const t=await X(n);if(!t)continue;const d=P[n]=new DOMParser().parseFromString(t,'text/xml');
+  leaves(d).forEach((el,i)=>R.push({id:n+'#'+i,g:n.replace('docProps/',''),k:el.parentNode.getAttribute?.('name')||el.tagName,v:el.textContent,ctl:'edit'}))}
+ if(F.some(f=>/^docProps\/thumbnail/.test(f.name)))R.push({id:'thumb',g:'Предпросмотр',k:'Миниатюра первой страницы',v:'присутствует в файле',ctl:'del'});
+ return{rows:R,async build(ed){const CL=['Company','Manager','Template','Application','AppVersion','HyperlinkBase','TotalTime'],out=[],H='<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
+  const ser=d=>enc.encode(H+new XMLSerializer().serializeToString(d)),mk=(f,raw)=>({name:f.name,meth:0,raw,crc:crc(raw),usz:raw.length}),rm=!ed||ed.thumb===null;
+  for(const f of F){if(/^docProps\/thumbnail/.test(f.name)&&rm)continue;
+   if(P[f.name]){const d=P[f.name].cloneNode(true);leaves(d).forEach((el,i)=>{const id=f.name+'#'+i,ln=el.localName;
+     if(!ed){if(f.name.endsWith('core.xml')||f.name.endsWith('custom.xml')||CL.includes(ln))el.textContent=/created|modified|lastPrinted/.test(ln)?'2000-01-01T00:00:00Z':''}
+     else if(id in ed)el.textContent=ed[id]??(/created|modified|lastPrinted/.test(ln)?'2000-01-01T00:00:00Z':/^\d+$/.test(el.textContent)?'0':'')});out.push(mk(f,ser(d)))}
+   else if(!ed&&/\/media\/[^/]+$/i.test(f.name)){const raw=f.meth?await inf(f.raw):f.raw,kd=sniff(raw);let res=f;if(['jpeg','png','webp','tiff'].includes(kd))try{res=mk(f,await(await HND[kd](raw)).build(null))}catch(e){}out.push(res)}
+   else if(!ed&&/^(word\/(document|comments|footnotes|endnotes|header\d*|footer\d*)|ppt\/commentAuthors|xl\/comments\d*)\.xml$/.test(f.name)){const t=(await X(f.name)).replace(/\sw:rsid\w*="[^"]*"/g,'').replace(/(w:author|w:initials)="[^"]*"/g,'$1="A"').replace(/<p:cmAuthor\b[^>]*>/g,m=>m.replace(/(name|initials)="[^"]*"/g,'$1="A"')).replace(/<author>[^<]*<\/author>/g,'<author>A</author>');out.push(mk(f,enc.encode(t)))}
+   else if(f.name=='_rels/.rels'&&rm){const d=new DOMParser().parseFromString(await X(f.name),'text/xml');[...d.getElementsByTagName('Relationship')].filter(r=>/thumbnail$/.test(r.getAttribute('Type')||'')).forEach(r=>r.remove());out.push(mk(f,ser(d)))}
+   else out.push(f)}
+  return zip(out)}}}
+
+/* ---------- интерфейс (один файл за раз) ---------- */
+const HND={jpeg:jpg,png,webp,tiff:tif,pdf,office};
+const sniff=b=>b[0]==255&&b[1]==216?'jpeg':b[0]==0x89&&b[1]==0x50?'png':lat.decode(b.subarray(0,4))=='RIFF'&&lat.decode(b.subarray(8,12))=='WEBP'?'webp':(b[0]==73&&b[1]==73&&b[2]==42)||(b[0]==77&&b[1]==77&&b[3]==42)?'tiff':lat.decode(b.subarray(0,4))=='%PDF'?'pdf':b[0]==0x50&&b[1]==0x4B?'office':null;
+const left=R=>R.filter(x=>x.ctl!='info'&&String(x.v).trim()&&x.v!='0, 0');
+const rep=(R,p)=>{const l=left(R);return p+' Непустых полей: '+l.length+(l.length?' ('+l.slice(0,6).map(x=>x.k).join(', ')+')':'')};
+let thumb;
+async function load(file){
+ $('#list').replaceChildren();if(thumb)URL.revokeObjectURL(thumb);thumb=null;
+ const box=h('div',{className:'card'});$('#list').append(box);
+ let cur=new Uint8Array(await file.arrayBuffer());const orig=cur,k=sniff(cur);
+ if(!k){box.append(h('div',{className:'warn'},file.name+': формат не поддерживается'));return}
+ const nm=file.name.replace(/(\.[^.]*)?$/,'_clean$1'),st=h('div',{className:'note'}),body=h('div');let r,ctrls=[];
+ const render=async pre=>{r=await HND[k](cur);ctrls=[];const tb=h('table');let last;
+  r.rows.forEach(w=>{if(w.g!=last){last=w.g;tb.append(h('tr',{className:'g'},h('td',{colSpan:3},w.g)))}
+   const sv=String(w.v),inp=w.ctl=='edit'?h('input',{type:'text',value:sv,maxLength:w.max||524288}):null,ck=w.ctl!='info'?h('input',{type:'checkbox',title:'Удалить поле'}):null;
+   tb.append(h('tr',{},h('td',{className:'k'},w.k),inp?h('td',{},inp):h('td',{className:'v'},sv.length>700?sv.slice(0,700)+'…':sv),h('td',{className:'x'},ck||'')));ctrls.push({w,inp,ck,sv})});
+  body.replaceChildren(r.rows.length?tb:h('div',{className:'note'},'Метаданные не найдены.'));st.textContent=pre?rep(r.rows,pre):''};
+ const collect=()=>{const ed={};for(const{w,inp,ck,sv}of ctrls){if(ck?.checked)ed[w.id]=null;else if(inp&&inp.value!==sv)ed[w.id]=inp.value}return ed};
+ try{await render()}catch(e){box.append(h('div',{className:'warn'},file.name+': ошибка — '+e.message));return}
+ if(['jpeg','png','webp'].includes(k))thumb=URL.createObjectURL(file);
+ box.append(h('div',{className:'top'},...(thumb?[h('img',{className:'th',src:thumb})]:[]),h('h3',{},file.name),h('span',{className:'tag'},k.toUpperCase()+' · '+(file.size/1024).toFixed(1)+' КБ'),
+  h('button',{className:'red',onclick:async()=>{try{cur=await r.build(null);await render('✔ Всё стёрто.')}catch(e){alert(e.message)}}},'Стереть всё'),
+  h('button',{onclick:async()=>{try{const ed=collect(),has=Object.keys(ed).length;if(!has&&cur===orig&&!confirm('Изменений нет — файл будет скачан без очистки. Продолжить?'))return;
+    const out=has?await r.build(ed):cur;dl(out,nm);st.textContent=rep((await HND[k](out)).rows,'⬇ Скачано. Проверка файла:')}catch(e){alert(e.message)}}},'Скачать'),
+  h('button',{onclick:()=>$('#inp').click()},'Загрузить новый')),st,body)}
+const take=f=>f&&load(f);
+$('#drop').onclick=()=>$('#inp').click();$('#inp').onchange=e=>{take(e.target.files[0]);e.target.value=''};
+$('#drop').ondragover=e=>{e.preventDefault();$('#drop').classList.add('on')};$('#drop').ondragleave=()=>$('#drop').classList.remove('on');
+$('#drop').ondrop=e=>{e.preventDefault();$('#drop').classList.remove('on');take(e.dataTransfer.files[0])};
+</script></body></html>
