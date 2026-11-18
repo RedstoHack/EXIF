@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>LocalMeta Pro — Редактор и очиститель метаданных</title>
+<title>LocalMeta Forensic</title>
 <style>
   :root {
     --bg: #0f172a; --card: #1e293b; --hover: #334155;
@@ -11,54 +11,54 @@
     --red: #ef4444; --green: #10b981; --border: #334155;
   }
   * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
-  body { background: var(--bg); color: var(--text); margin: 0; padding: 16px; display: flex; justify-content: center; }
+  body { background: var(--bg); color: var(--text); margin: 0; padding: 14px; display: flex; justify-content: center; }
   .wrap { max-width: 1060px; width: 100%; }
-  header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 14px; margin-bottom: 18px; }
-  .badge { background: rgba(16,185,129,0.15); color: var(--green); padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }
-  .drop { border: 2px dashed var(--border); border-radius: 12px; padding: 38px 16px; text-align: center; background: var(--card); cursor: pointer; transition: 0.2s; }
+  header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 12px; margin-bottom: 16px; }
+  .badge { background: rgba(16,185,129,0.15); color: var(--green); padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; }
+  .drop { display: block; border: 2px dashed var(--border); border-radius: 12px; padding: 30px 16px; text-align: center; background: var(--card); cursor: pointer; }
   .drop:hover, .drop.drag { border-color: var(--blue); background: var(--hover); }
-  .grid { display: none; grid-template-columns: 300px 1fr; gap: 18px; margin-top: 18px; }
-  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
-  .box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
-  .row { display: grid; grid-template-columns: 190px 1fr 34px; gap: 8px; margin-bottom: 8px; align-items: center; }
+  .pick-btn { display: inline-block; background: var(--blue); color: #fff; padding: 10px 18px; border-radius: 8px; font-weight: 600; margin-top: 10px; font-size: 14px; }
+  .file-hidden { position: absolute; width: 1px; height: 1px; opacity: 0; overflow: hidden; }
+  .grid { display: none; grid-template-columns: 300px 1fr; gap: 16px; margin-top: 16px; }
+  @media (max-width: 820px) { .grid { grid-template-columns: 1fr; } }
+  .box { background: var(--card); border: 1px solid var(--border); border-radius: 10px; padding: 14px; }
+  .row { display: grid; grid-template-columns: 170px 1fr 34px; gap: 8px; margin-bottom: 8px; align-items: center; }
   input, textarea { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 10px; border-radius: 6px; width: 100%; font-size: 13px; }
-  textarea { min-height: 140px; font-family: monospace; resize: vertical; }
+  textarea { min-height: 130px; font-family: monospace; resize: vertical; }
   button { cursor: pointer; border: none; border-radius: 6px; padding: 10px 14px; font-weight: 600; }
   .btn-blue { background: var(--blue); color: #fff; width: 100%; margin-top: 10px; }
   .btn-red { background: var(--red); color: #fff; width: 100%; margin-top: 10px; }
+  .btn-green { background: var(--green); color: #fff; width: 100%; margin-top: 10px; }
   .btn-del { background: rgba(239,68,68,0.2); color: var(--red); padding: 8px; }
-  .tabs { display: flex; gap: 8px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 10px; flex-wrap: wrap; }
-  .tab { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 6px 12px; font-size: 13px; }
+  .tabs { display: flex; gap: 6px; margin-bottom: 12px; border-bottom: 1px solid var(--border); padding-bottom: 10px; flex-wrap: wrap; }
+  .tab { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 6px 10px; font-size: 12px; }
   .tab.active { background: var(--blue); color: #fff; border-color: var(--blue); }
-  .note { background: rgba(245,158,11,0.15); border-left: 4px solid #f59e0b; padding: 10px 12px; font-size: 13px; margin-bottom: 12px; border-radius: 4px; line-height: 1.4; }
-  .prev img { max-width: 100%; max-height: 200px; object-fit: contain; border-radius: 6px; margin-top: 10px; border: 1px solid var(--border); background: #000; }
-  .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); align-items: center; justify-content: center; z-index: 99; }
-  .modal-box { background: var(--card); padding: 24px; border-radius: 10px; max-width: 380px; width: 90%; border: 1px solid var(--border); }
+  .note { background: rgba(245,158,11,0.15); border-left: 4px solid #f59e0b; padding: 10px 12px; font-size: 13px; margin-bottom: 10px; border-radius: 4px; word-break: break-word; }
+  .prev img { max-width: 100%; max-height: 180px; object-fit: contain; border-radius: 6px; margin-top: 8px; border: 1px solid var(--border); background: #000; }
 </style>
 </head>
 <body>
 <div class="wrap">
   <header>
-    <div>
-      <h2 style="margin:0;">LocalMeta Pro</h2>
-      <small style="color:var(--muted)">exifr • piexifjs • pdf-lib • JSZip — 100% локально</small>
-    </div>
-    <div class="badge" id="libStatus">⏳ Загрузка библиотек...</div>
+    <div><h2 style="margin:0;">LocalMeta Forensic</h2><small style="color:var(--muted)">PDF Fonts/Engine • EXIF/XMP/Thumbnail • C2PA/AI • Office</small></div>
+    <div class="badge" id="libStatus">⏳ Подключение модулей...</div>
   </header>
-
-  <div class="drop" id="drop">
-    <h3 style="margin-top:0;">Перетащите файл сюда или нажмите для выбора</h3>
-    <p style="color:var(--muted); margin-bottom:0; font-size:13px;">
-      Поддержка: JPEG, PNG, WebP, TIFF, C2PA / Метки ИИ, PDF, DOCX, XLSX, PPTX
-    </p>
-    <input type="file" id="inp" hidden>
+  <label class="drop" id="drop" for="inp">
+    <div style="font-size:16px; font-weight:600;">Выберите один или несколько файлов</div>
+    <div style="color:var(--muted); font-size:13px; margin-top:4px;">1 файл — полный разбор и редактор. 2+ файлов — пакетная очистка в ZIP.</div>
+    <div class="pick-btn">📂 Выбрать файлы с устройства</div>
+    <input type="file" id="inp" class="file-hidden" multiple>
+  </label>
+  <div class="box" id="batchBox" style="display:none; margin-top:16px;">
+    <h3 style="margin-top:0;">Пакетная очистка файлов</h3>
+    <div id="batchLog" style="font-size:13px; color:var(--muted); line-height:1.7; max-height:240px; overflow-y:auto;"></div>
+    <button class="btn-green" id="batchDownload" style="display:none;">📦 Скачать очищенный ZIP-архив</button>
   </div>
-
   <div class="grid" id="work">
     <div class="box">
-      <h4 style="margin-top:0;">Файл</h4>
+      <h4 style="margin-top:0;">Информация о файле</h4>
       <div id="info" style="font-size:13px; color:var(--muted); line-height:1.6;"></div>
-      <div class="prev" id="prev" style="margin-top:12px;"></div>
+      <div class="prev" id="prev" style="margin-top:10px;"></div>
       <button class="btn-red" id="purge">🧹 Удалить ВСЕ метаданные</button>
       <button class="btn-blue" id="save">💾 Скачать готовый файл</button>
     </div>
@@ -66,209 +66,277 @@
       <div class="tabs" id="tabs"></div>
       <div id="banner"></div>
       <div id="fields"></div>
-      <button class="tab" id="add" style="margin-top:12px;">+ Добавить поле</button>
+      <button class="tab" id="add" style="margin-top:10px;">+ Добавить поле</button>
     </div>
   </div>
 </div>
-
-<div class="modal" id="pwdModal">
-  <div class="modal-box">
-    <h3 style="margin-top:0;">Защищенный PDF</h3>
-    <p style="font-size:13px; color:var(--muted);">Введите пароль для открытия (после сохранения защита будет снята):</p>
-    <input type="password" id="pwdInput" placeholder="Пароль..." style="margin-bottom:14px;">
-    <button class="btn-blue" id="pwdBtn">Открыть</button>
-  </div>
-</div>
 <script>
-var S = { file: null, buf: null, ext: "", tab: "gen", meta: { gen: {}, c2pa: null, sig: [], emb: [] }, raw: {} };
+var S = { file: null, buf: null, ext: "", tab: "gen", meta: { gen: {}, c2pa: null, sig: Array.of(), emb: Array.of() }, raw: {}, batchZip: null };
 function $(id) { return document.getElementById(id); }
 
-function loadScript(src) {
-  return new Promise(function(resolve, reject) {
-    var s = document.createElement("script");
-    s.src = src;
-    s.onload = resolve;
-    s.onerror = function() { reject(new Error("Не удалось загрузить " + src)); };
-    document.head.appendChild(s);
+function loadFallback(urls) {
+  return new Promise(function(resolve) {
+    var i = 0;
+    function next() {
+      if (i >= urls.length) return resolve(false);
+      var s = document.createElement("script");
+      s.src = urls.at(i); i = i + 1;
+      s.onload = function() { resolve(true); };
+      s.onerror = function() { s.remove(); next(); };
+      document.head.appendChild(s);
+    }
+    next();
   });
 }
 
-Promise.all([
-  loadScript("https://jsdelivr.net"),
-  loadScript("https://cloudflare.com"),
-  loadScript("https://unpkg.com"),
-  loadScript("https://cloudflare.com")
-]).then(function() {
-  $("libStatus").textContent = "🔒 Библиотеки готовы (100% локально)";
-}).catch(function(err) {
-  $("libStatus").textContent = "⚠️ Ошибка сети при загрузке библиотек";
-  $("libStatus").style.color = "#ef4444";
-  alert(err.message);
+Promise.all(Array.of(
+  loadFallback(Array.of("https://cloudflare.com", "https://jsdelivr.net")),
+  loadFallback(Array.of("https://cloudflare.com", "https://jsdelivr.net")),
+  loadFallback(Array.of("https://cloudflare.com", "https://jsdelivr.net")),
+  loadFallback(Array.of("https://cloudflare.com", "https://jsdelivr.net"))
+)).then(function(res) {
+  var ok = res.filter(Boolean).length;
+  $("libStatus").textContent = ok === 4 ? "🔒 Все модули активны" : "⚠️ Автономный режим (" + ok + "/4)";
 });
 
-$("drop").onclick = function() { $("inp").click(); };
 $("drop").ondragover = function(e) { e.preventDefault(); $("drop").classList.add("drag"); };
 $("drop").ondragleave = function() { $("drop").classList.remove("drag"); };
 $("drop").ondrop = function(e) {
-  e.preventDefault();
-  $("drop").classList.remove("drag");
-  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) {
-    handleFile(e.dataTransfer.files.item(0));
-  }
+  e.preventDefault(); $("drop").classList.remove("drag");
+  if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length) routeFiles(e.dataTransfer.files);
 };
 $("inp").onchange = function(e) {
-  if (e.target && e.target.files && e.target.files.length) {
-    handleFile(e.target.files.item(0));
-  }
+  if (e.target && e.target.files && e.target.files.length) routeFiles(e.target.files);
 };
 
-async function handleFile(file) {
+function routeFiles(list) {
+  if (list.length === 1) {
+    $("batchBox").style.display = "none";
+    handleSingle(list.item(0));
+  } else {
+    $("work").style.display = "none";
+    handleBatch(list);
+  }
+}
+
+async function handleBatch(list) {
+  if (!window.JSZip) return alert("Для ZIP-архива нужна библиотека JSZip.");
+  $("batchBox").style.display = "block";
+  $("batchDownload").style.display = "none";
+  $("batchLog").innerHTML = "Обработка " + list.length + " файлов...<br>";
+  var zip = new JSZip();
+  for (var i = 0; i < list.length; i++) {
+    var f = list.item(i);
+    try {
+      var clean = await quickClean(f);
+      zip.file("clean_" + f.name, clean);
+      $("batchLog").innerHTML += "✅ " + esc(f.name) + " — очищен<br>";
+    } catch (e) {
+      $("batchLog").innerHTML += "❌ " + esc(f.name) + " — " + esc(e.message) + "<br>";
+    }
+  }
+  S.batchZip = await zip.generateAsync({ type: "blob" });
+  $("batchDownload").style.display = "block";
+}
+
+$("batchDownload").onclick = function() {
+  if (!S.batchZip) return;
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(S.batchZip);
+  a.download = "cleaned_files.zip";
+  a.click();
+};
+
+async function handleSingle(file) {
   if (!file) return;
-  S.file = file;
-  S.buf = await file.arrayBuffer();
+  S.file = file; S.buf = await file.arrayBuffer();
   S.ext = file.name.split(".").pop().toLowerCase();
-  S.meta = { gen: {}, c2pa: null, sig: [], emb: [] };
-  S.raw = {};
-
-  $("info").innerHTML = "<div><b>Имя:</b> " + esc(file.name) + "</div><div><b>Размер:</b> " + (file.size / 1024).toFixed(2) + " KB</div><div><b>Формат:</b> " + S.ext.toUpperCase() + "</div>";
+  S.meta = { gen: {}, c2pa: null, sig: Array.of(), emb: Array.of() }; S.raw = {};
+  $("info").innerHTML = "<div><b>Файл:</b> " + esc(file.name) + "</div><div><b>Размер:</b> " + (file.size / 1024).toFixed(2) + " KB</div>";
   $("prev").innerHTML = "";
-
   var bytes = new Uint8Array(S.buf);
   detectC2PA(bytes);
 
-  try {
-    if (["jpg", "jpeg", "png", "webp", "tif", "tiff"].includes(S.ext)) {
-      await parseImage(bytes);
-    } else if (S.ext === "pdf") {
-      await parsePDF(bytes, null);
-    } else if (["docx", "xlsx", "pptx"].includes(S.ext)) {
-      await parseOffice();
-    } else {
-      return alert("Формат ." + S.ext + " не поддерживается.");
-    }
-    $("work").style.display = "grid";
-    draw();
-  } catch (err) {
-    console.error(err);
-    alert("Ошибка при чтении файла: " + err.message);
-  }
+  if (Array.of("jpg", "jpeg", "png", "webp", "tif", "tiff").includes(S.ext)) await parseImage(bytes);
+  else if (S.ext === "pdf") await parsePDF(bytes);
+  else if (Array.of("docx", "xlsx", "pptx").includes(S.ext)) await parseOffice();
+  else return alert("Формат ." + S.ext + " не поддерживается.");
+
+  $("work").style.display = "grid";
+  draw();
 }
 
-function detectC2PA(bytes) {
+function scanPdfTokens(rawStr, key) {
+  var found = Array.of(), pos = 0;
+  while (true) {
+    var idx = rawStr.indexOf(key, pos);
+    if (idx === -1) break;
+    var start = idx + key.length;
+    while (start < rawStr.length && (rawStr.charAt(start) === " " || rawStr.charAt(start) === "/")) start++;
+    var end = start;
+    while (end < rawStr.length) {
+      var ch = rawStr.charAt(end);
+      if (ch === " " || ch === "\r" || ch === "\n" || ch === "/" || ch === ">" || ch === ")" || ch === "]") break;
+      end++;
+    }
+    var val = rawStr.slice(start, end);
+    if (val.length > 7 && val.charAt(6) === "+") val = val.slice(7);
+    if (val && !found.includes(val)) found.push(val);
+    pos = end;
+  }
+  return found;
+}
+
+function scanPdfParenVal(rawStr, key) {
+  var idx = rawStr.indexOf(key);
+  if (idx === -1) return "";
+  var p1 = rawStr.indexOf("(", idx + key.length);
+  if (p1 === -1 || p1 - idx > 20) return "";
+  var p2 = rawStr.indexOf(")", p1 + 1);
+  if (p2 === -1) return "";
+  return rawStr.slice(p1 + 1, p2);
+}
+
+async function parsePDF(bytes) {
+  var rawStr = new TextDecoder("latin1").decode(bytes);
+  var ver = rawStr.slice(0, 12).trim();
+  if (ver.startsWith("%PDF-")) S.meta.gen["PDF_Version"] = ver.replace("%PDF-", "");
+
+  var producer = scanPdfParenVal(rawStr, "/Producer");
+  var creator = scanPdfParenVal(rawStr, "/Creator");
+  var cDate = scanPdfParenVal(rawStr, "/CreationDate");
+  var mDate = scanPdfParenVal(rawStr, "/ModDate");
+  var title = scanPdfParenVal(rawStr, "/Title");
+  var author = scanPdfParenVal(rawStr, "/Author");
+
+  if (title) S.meta.gen["Title"] = title;
+  if (author) S.meta.gen["Author"] = author;
+  if (creator) S.meta.gen["Creator"] = creator;
+  if (producer) S.meta.gen["PDF_Engine (Producer)"] = producer;
+  if (cDate) S.meta.gen["Creation_Date"] = cDate;
+  if (mDate) S.meta.gen["Modification_Date"] = mDate;
+
+  if (window.PDFLib) {
+    try {
+      var pdf = await PDFLib.PDFDocument.load(S.buf, { ignoreEncryption: true });
+      S.raw.pdf = pdf;
+      if (pdf.getTitle()) S.meta.gen["Title"] = pdf.getTitle();
+      if (pdf.getAuthor()) S.meta.gen["Author"] = pdf.getAuthor();
+      if (pdf.getCreator()) S.meta.gen["Creator"] = pdf.getCreator();
+      if (pdf.getProducer()) S.meta.gen["PDF_Engine (Producer)"] = pdf.getProducer();
+      if (pdf.getCreationDate()) S.meta.gen["Creation_Date"] = pdf.getCreationDate().toISOString();
+      if (pdf.getModificationDate()) S.meta.gen["Modification_Date"] = pdf.getModificationDate().toISOString();
+      $("prev").innerHTML = "<div class='note'>PDF (" + pdf.getPageCount() + " стр.). Все поля и шрифты извлечены.</div>";
+    } catch (e) {}
+  }
+
+  var fonts = scanPdfTokens(rawStr, "/BaseFont").concat(scanPdfTokens(rawStr, "/FontName"));
+  var uniqFonts = Array.from(new Set(fonts));
+  if (uniqFonts.length) S.meta.emb.push("Встроенные шрифты (" + uniqFonts.length + "): " + uniqFonts.join(", "));
+
+  var eofCount = rawStr.split("%%EOF").length - 1;
+  if (eofCount > 1) S.meta.emb.push("Инкрементальных версий (%%EOF): " + eofCount + " (удалятся при сохранении)");
+  if (rawStr.includes("/JavaScript") || rawStr.includes("/JS")) S.meta.emb.push("⚠️ Обнаружен встроенный JavaScript!");
+  if (rawStr.includes("/EmbeddedFile")) S.meta.emb.push("⚠️ Обнаружены скрытые вложенные файлы (/EmbeddedFile)");
+  if (rawStr.includes("/URI")) S.meta.emb.push("В документе присутствуют внешние ссылки (/URI)");
+  if (rawStr.includes("/Type /Sig") || rawStr.includes("/Type/Sig")) S.meta.sig.push({ signer: "Подпись PDF", raw: "Обнаружен словарь цифровой подписи /Sig" });
+}
+  function detectC2PA(bytes) {
   var txt = new TextDecoder("latin1").decode(bytes);
   var idx = txt.indexOf("c2pa");
   if (idx === -1) return;
-  var start = Math.max(0, idx - 64);
-  var end = Math.min(bytes.length, idx + 8192);
-  var sliceTxt = new TextDecoder("utf-8", { fatal: false }).decode(bytes.slice(start, end));
-  var jsonBlocks = sliceTxt.match(/\{[^{}]*"(?:claim_generator|assertions|signature_info|alg|issuer|title|softwareAgent|actions|device)"[^{}]*\}/g);
-  S.meta.c2pa = {
-    text: jsonBlocks ? jsonBlocks.join("\n---\n") : sliceTxt.replace(/[^\x20-\x7E\u0400-\u04FF]/g, " ").replace(/\s{2,}/g, "\n")
-  };
+  var slice = new TextDecoder("utf-8", { fatal: false }).decode(bytes.slice(Math.max(0, idx - 64), Math.min(bytes.length, idx + 8192)));
+  var out = "";
+  for (var i = 0; i < slice.length; i++) {
+    var c = slice.charCodeAt(i);
+    out += ((c >= 32 && c <= 126) || (c >= 1040 && c <= 1103)) ? slice.charAt(i) : " ";
+  }
+  S.meta.c2pa = { text: out.replace(/\s+/g, " ").trim() };
 }
 
 async function parseImage(bytes) {
-  if (["jpg", "jpeg", "png", "webp"].includes(S.ext)) {
+  if (Array.of("jpg", "jpeg", "png", "webp").includes(S.ext)) {
     var url = await toUrl(S.buf, "image/" + (S.ext === "jpg" ? "jpeg" : S.ext));
     $("prev").innerHTML = "<strong style='font-size:12px;'>Предпросмотр:</strong><br><img src='" + url + "'>";
-  } else {
-    $("prev").innerHTML = "<div class='note'>TIFF загружен для разбора метаданных.</div>";
   }
-
-  // 1. Глубокий разбор через библиотеку exifr (EXIF, XMP, IPTC, ICC, GPS)
   if (window.exifr) {
     try {
       var parsed = await exifr.parse(S.buf, { xmp: true, iptc: true, icc: true, jfif: true, ihdr: true });
       if (parsed) {
         Object.entries(parsed).forEach(function(pair) {
           var k = pair.at(0), v = pair.at(1);
-          if (v !== undefined && v !== null && !(v instanceof Uint8Array)) {
-            S.meta.gen[k] = typeof v === "object" ? JSON.stringify(v) : String(v);
-          }
+          if (v !== undefined && v !== null && !(v instanceof Uint8Array)) S.meta.gen[k] = typeof v === "object" ? JSON.stringify(v) : String(v);
         });
       }
+      var gps = await exifr.gps(S.buf);
+      if (gps && gps.latitude) S.meta.emb.push("📍 GPS координаты: " + gps.latitude.toFixed(6) + ", " + gps.longitude.toFixed(6));
+      var thumb = await exifr.thumbnailUrl(S.buf);
+      if (thumb) S.meta.emb.push("⚠️ Внутри EXIF зашита скрытая миниатюра исходного снимка (будет удалена при сохранении).");
     } catch (e) {}
   }
 
-  // 2. Подготовка структур для сохранения без потери качества
-  if (["jpg", "jpeg"].includes(S.ext) && window.piexif) {
-    try {
-      var jpegUrl = await toUrl(S.buf, "image/jpeg");
-      S.raw.ex = piexif.load(jpegUrl);
-    } catch (e) {
-      S.raw.ex = { "0th": {}, "Exif": {}, "GPS": {}, "1st": {} };
+  if (Array.of("jpg", "jpeg").includes(S.ext)) {
+    S.raw.jpgSegments = parseJpegSegments(bytes);
+    if (window.piexif) {
+      try { S.raw.ex = piexif.load(await toUrl(S.buf, "image/jpeg")); } catch (e) { S.raw.ex = { "0th": {}, "Exif": {}, "GPS": {}, "1st": {} }; }
     }
   } else if (S.ext === "png") {
-    var view = new DataView(S.buf), o = 8;
-    S.raw.chunks = [];
-    while (o < view.byteLength) {
-      var len = view.getUint32(o);
-      var type = String.fromCharCode.apply(null, bytes.slice(o + 4, o + 8));
-      var data = bytes.slice(o + 8, o + 8 + len);
-      S.raw.chunks.push({ type: type, raw: bytes.slice(o, o + 12 + len), data: data });
-      if (["tEXt", "iTXt", "zTXt", "eXIf", "tIME"].includes(type)) {
-        S.meta.gen["PNG_" + type + "_" + o] = new TextDecoder("utf-8", { fatal: false }).decode(data).replace(/\0/g, ": ");
+    S.raw.chunks = extractPngChunks(S.buf, bytes);
+    S.raw.chunks.forEach(function(c, idx) {
+      if (Array.of("tEXt", "iTXt", "zTXt", "eXIf", "tIME").includes(c.type)) {
+        S.meta.gen["PNG_" + c.type + "_" + idx] = new TextDecoder("utf-8", { fatal: false }).decode(c.data).split("\0").join(": ");
       }
-      o += 12 + len;
-    }
-  } else if (S.ext === "webp") {
-    var wView = new DataView(S.buf), wo = 12;
-    S.raw.chunks = [];
-    while (wo < wView.byteLength) {
-      var wType = String.fromCharCode.apply(null, bytes.slice(wo, wo + 4));
-      var wLen = wView.getUint32(wo + 4, true);
-      var pad = wLen + (wLen % 2);
-      S.raw.chunks.push({ type: wType, raw: bytes.slice(wo, wo + 8 + pad) });
-      wo += 8 + pad;
-    }
-  }
-}
-
-async function parsePDF(bytes, password) {
-  try {
-    var opts = { ignoreEncryption: true };
-    if (password) opts.password = password;
-    var pdf = await PDFLib.PDFDocument.load(S.buf, opts);
-    S.raw.pdf = pdf;
-    S.meta.gen = {
-      Title: pdf.getTitle() || "", Author: pdf.getAuthor() || "", Subject: pdf.getSubject() || "",
-      Keywords: pdf.getKeywords() || "", Creator: pdf.getCreator() || "", Producer: pdf.getProducer() || "",
-      CreationDate: pdf.getCreationDate() ? pdf.getCreationDate().toISOString() : "",
-      ModificationDate: pdf.getModificationDate() ? pdf.getModificationDate().toISOString() : ""
-    };
-    var rawStr = new TextDecoder("latin1").decode(bytes);
-    var eofCount = (rawStr.match(/%%EOF/g) || []).length;
-    if (eofCount > 1) S.meta.emb.push("Найдено " + eofCount + " инкрементальных версий документа (будут удалены при сохранении).");
-    var xmp = rawStr.match(/<x:xmpmeta[\s\S]*?<\/x:xmpmeta>/);
-    if (xmp) S.meta.gen["XMP_Metadata"] = xmp.at(0);
-    var sigs = rawStr.match(/\/Type\s*\/Sig[\s\S]{0,600}/g) || [];
-    sigs.forEach(function(s, i) {
-      var m = s.match(/\/Name\s*\(([^)]+)\)/);
-      var signer = (m && m.at(1)) || ("Подпись PDF #" + (i + 1));
-      S.meta.sig.push({ signer: signer, raw: s.slice(0, 400) });
     });
-    var fonts = Array.from(new Set(rawStr.match(/\/BaseFont\s*\/([A-Za-z0-9+\-]+)/g) || []));
-    if (fonts.length) S.meta.emb.push("Шрифты: " + fonts.map(function(f) { return f.replace("/BaseFont", "").trim(); }).join(", "));
-    $("prev").innerHTML = "<div class='note'>PDF (" + pdf.getPageCount() + " стр.). Ограничения сняты автоматически.</div>";
-  } catch (e) {
-    if (e.message.toLowerCase().includes("password") || e.message.toLowerCase().includes("encrypted")) $("pwdModal").style.display = "flex";
-    else throw e;
+  } else if (S.ext === "webp") {
+    S.raw.chunks = extractWebpChunks(S.buf, bytes);
   }
 }
 
-$("pwdBtn").onclick = async function() {
-  var pwd = $("pwdInput").value;
-  $("pwdModal").style.display = "none";
-  await parsePDF(new Uint8Array(S.buf), pwd);
-  $("work").style.display = "grid";
-  draw();
-};
+function parseJpegSegments(bytes) {
+  var segs = Array.of(), o = 2;
+  while (o < bytes.length - 1) {
+    if (bytes.at(o) !== 0xFF) break;
+    var marker = bytes.at(o + 1);
+    if (marker === 0xDA) { segs.push({ marker: marker, raw: bytes.slice(o) }); break; }
+    var len = (bytes.at(o + 2) << 8) | bytes.at(o + 3);
+    segs.push({ marker: marker, raw: bytes.slice(o, o + 2 + len) });
+    o += 2 + len;
+  }
+  return segs;
+}
+
+function extractPngChunks(buf, bytes) {
+  var view = new DataView(buf), o = 8, res = Array.of();
+  while (o < view.byteLength) {
+    var len = view.getUint32(o);
+    var type = String.fromCharCode.apply(null, bytes.slice(o + 4, o + 8));
+    var data = bytes.slice(o + 8, o + 8 + len);
+    res.push({ type: type, raw: bytes.slice(o, o + 12 + len), data: data });
+    o += 12 + len;
+  }
+  return res;
+}
+
+function extractWebpChunks(buf, bytes) {
+  var view = new DataView(buf), o = 12, res = Array.of();
+  while (o < view.byteLength) {
+    var type = String.fromCharCode.apply(null, bytes.slice(o, o + 4));
+    var len = view.getUint32(o + 4, true);
+    var pad = len + (len % 2);
+    res.push({ type: type, raw: bytes.slice(o, o + 8 + pad) });
+    o += 8 + pad;
+  }
+  return res;
+}
 
 async function parseOffice() {
+  if (!window.JSZip) return alert("Для документов Office нужна библиотека JSZip.");
   var zip = await JSZip.loadAsync(S.buf);
   S.raw.zip = zip;
   var parser = new DOMParser();
-  for (var xmlPath of ["docProps/core.xml", "docProps/app.xml", "docProps/custom.xml"]) {
+  var props = Array.of("docProps/core.xml", "docProps/app.xml", "docProps/custom.xml");
+  for (var i = 0; i < props.length; i++) {
+    var xmlPath = props.at(i);
     if (zip.file(xmlPath)) {
       var doc = parser.parseFromString(await zip.file(xmlPath).async("string"), "application/xml");
       Array.from(doc.documentElement.children).forEach(function(n) {
@@ -276,29 +344,22 @@ async function parseOffice() {
       });
     }
   }
-  for (var path of Object.keys(zip.files)) {
-    if (path.endsWith(".rels") || path.includes("settings.xml") || path.includes("printerSettings")) {
-      var paths = (await zip.file(path).async("string")).match(/[A-Za-z]:\\[^"<]+|\\\\[^"<]+/g);
-      if (paths) S.meta.gen["Path_" + path] = paths.join("; ");
-    }
-    if (path.includes("thumbnail")) {
-      $("prev").innerHTML = "<strong style='font-size:12px;'>Миниатюра документа:</strong><br><img src='" + URL.createObjectURL(await zip.file(path).async("blob")) + "'>";
-    }
-    if (path.match(/media\/.*\.(jpg|jpeg|png|webp)$/i)) S.meta.emb.push("Встроенное фото: " + path + " (EXIF будет очищен)");
-    if (path.startsWith("_xmlsignatures/")) {
-      var sigXml = await zip.file(path).async("string");
-      var mSubj = sigXml.match(/<X509SubjectName>([^<]+)<\/X509SubjectName>/);
-      S.meta.sig.push({ signer: (mSubj && mSubj.at(1)) || path, raw: sigXml.slice(0, 450) });
-    }
+  var allPaths = Object.keys(zip.files);
+  for (var j = 0; j < allPaths.length; j++) {
+    var path = allPaths.at(j);
+    if (path.includes("comments.xml")) S.meta.emb.push("⚠️ Найдены скрытые комментарии рецензентов (" + path + ")");
+    if (path.includes("thumbnail")) $("prev").innerHTML = "<strong style='font-size:12px;'>Миниатюра документа:</strong><br><img src='" + URL.createObjectURL(await zip.file(path).async("blob")) + "'>";
+    if (path.includes("media/")) S.meta.emb.push("Встроенный медиафайл: " + path + " (EXIF будет очищен)");
+    if (path.startsWith("_xmlsignatures/")) S.meta.sig.push({ signer: path, raw: (await zip.file(path).async("string")).slice(0, 450) });
   }
 }
   function draw() {
-  var list = [
-    { id: "gen", lbl: "Основные (" + Object.keys(S.meta.gen).length + ")" },
+  var list = Array.of(
+    { id: "gen", lbl: "Метаданные (" + Object.keys(S.meta.gen).length + ")" },
+    { id: "emb", lbl: "Шрифты и объекты (" + S.meta.emb.length + ")" },
     { id: "c2pa", lbl: "C2PA / ИИ " + (S.meta.c2pa ? "⚠️" : "") },
-    { id: "sig", lbl: "Подписи (" + S.meta.sig.length + ")" },
-    { id: "emb", lbl: "Встроенное (" + S.meta.emb.length + ")" }
-  ];
+    { id: "sig", lbl: "Подписи (" + S.meta.sig.length + ")" }
+  );
   $("tabs").innerHTML = list.map(function(t) {
     return "<button class='tab " + (S.tab === t.id ? "active" : "") + "' onclick=\"S.tab='" + t.id + "';draw()\">" + t.lbl + "</button>";
   }).join("");
@@ -307,8 +368,7 @@ async function parseOffice() {
 
   if (S.tab === "gen") {
     var html = Object.entries(S.meta.gen).map(function(pair) {
-      var rawKey = pair.at(0);
-      var k = esc(rawKey), v = esc(pair.at(1));
+      var k = esc(pair.at(0)), v = esc(pair.at(1));
       return "<div class='row'>" +
         "<input value='" + k + "' readonly style='color:var(--muted)'>" +
         "<input value='" + v + "' onchange=\"updateField('" + k + "', this.value)\">" +
@@ -316,141 +376,130 @@ async function parseOffice() {
       "</div>";
     }).join("");
     $("fields").innerHTML = html || "<p style='color:var(--muted);font-size:13px;'>Метаданные отсутствуют или полностью очищены.</p>";
+  } else if (S.tab === "emb") {
+    $("fields").innerHTML = S.meta.emb.map(function(x) { return "<div class='note'>" + esc(x) + "</div>"; }).join("") || "<p style='color:var(--muted);font-size:13px;'>Встроенные шрифты, GPS и скрытые объекты не найдены.</p>";
   } else if (S.tab === "c2pa") {
-    $("banner").innerHTML = "<div class='note'>Инструмент не проверяет подпись C2PA: данные отображаются так, как записаны в файле. Вы можете отредактировать или удалить весь блок.</div>";
+    $("banner").innerHTML = "<div class='note'>Инструмент не проверяет подпись C2PA: данные отображаются так, как записаны в файле.</div>";
     $("fields").innerHTML = S.meta.c2pa
       ? "<textarea onchange='S.meta.c2pa.text=this.value'>" + esc(S.meta.c2pa.text) + "</textarea><button class='btn-red' onclick='S.meta.c2pa=null;draw()'>Удалить C2PA полностью</button>"
-      : "<p style='color:var(--muted);font-size:13px;'>Учетные данные C2PA / метки ИИ не обнаружены.</p>";
-  } else if (S.tab === "sig") {
-    $("banner").innerHTML = "<div class='note'>Инструмент не проверяет подпись: любое имя может написать кто угодно. После любых изменений подпись перестает быть действительной.</div>";
+      : "<p style='color:var(--muted);font-size:13px;'>Метки C2PA / ИИ не обнаружены.</p>";
+  } else {
+    $("banner").innerHTML = "<div class='note'>После любых изменений цифровая подпись перестает быть действительной.</div>";
     $("fields").innerHTML = S.meta.sig.map(function(s, i) {
       return "<div class='box' style='margin-bottom:10px;background:var(--bg);'>" +
         "<div style='margin-bottom:6px;'><small>Подписант:</small><input value='" + esc(s.signer) + "' onchange='S.meta.sig.at(" + i + ").signer=this.value'></div>" +
-        "<div style='margin-bottom:6px;'><small>Сертификат / Данные:</small><textarea onchange='S.meta.sig.at(" + i + ").raw=this.value'>" + esc(s.raw) + "</textarea></div>" +
         "<button class='btn-red' onclick='S.meta.sig.splice(" + i + ",1);draw()'>Удалить подпись</button></div>";
     }).join("") || "<p style='color:var(--muted);font-size:13px;'>Цифровые подписи не обнаружены.</p>";
-  } else {
-    $("fields").innerHTML = S.meta.emb.map(function(x) { return "<div class='note'>" + esc(x) + "</div>"; }).join("") || "<p style='color:var(--muted);font-size:13px;'>Встроенные объекты не найдены.</p>";
   }
 }
 
-window.updateField = function(key, val) { S.meta.gen[key] = val; };
-window.deleteField = function(key) { delete S.meta.gen[key]; draw(); };
+window.updateField = function(k, v) { S.meta.gen[k] = v; };
+window.deleteField = function(k) { delete S.meta.gen[k]; draw(); };
 
 $("add").onclick = function() {
-  var k = prompt("Введите название поля (например: Author, Title, Software, Artist):");
+  var k = prompt("Введите название поля (например: Author, Title, Creator, Software):");
   if (k) { S.meta.gen[k] = ""; draw(); }
 };
 
 $("purge").onclick = function() {
-  S.meta.gen = {}; S.meta.c2pa = null; S.meta.sig = []; draw();
+  S.meta.gen = {}; S.meta.c2pa = null; S.meta.sig = Array.of(); draw();
 };
+
+async function quickClean(file) {
+  var buf = await file.arrayBuffer();
+  var ext = file.name.split(".").pop().toLowerCase();
+  var bytes = new Uint8Array(buf);
+  var blob;
+  if (Array.of("jpg", "jpeg").includes(ext)) {
+    var segs = parseJpegSegments(bytes).filter(function(s) { return s.marker < 0xE1 || s.marker > 0xEF; });
+    blob = new Blob(Array.of(new Uint8Array(Array.of(0xFF, 0xD8))).concat(segs.map(function(s) { return s.raw; })), { type: "image/jpeg" });
+  } else if (ext === "png") {
+    var keep = extractPngChunks(buf, bytes).filter(function(c) { return !Array.of("tEXt", "iTXt", "zTXt", "eXIf", "tIME").includes(c.type); });
+    blob = new Blob(Array.of(new Uint8Array(Array.of(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))).concat(keep.map(function(c) { return c.raw; })), { type: "image/png" });
+  } else if (ext === "webp") {
+    blob = buildWebpBlob(extractWebpChunks(buf, bytes).filter(function(c) { return !Array.of("EXIF", "XMP ", "ICCP").includes(c.type); }));
+  } else if (ext === "pdf" && window.PDFLib) {
+    var pdf = await PDFLib.PDFDocument.load(buf, { ignoreEncryption: true });
+    var out = await PDFLib.PDFDocument.create();
+    var pages = await out.copyPages(pdf, pdf.getPageIndices());
+    pages.forEach(function(p) { out.addPage(p); });
+    blob = new Blob(Array.of(await out.save()), { type: "application/pdf" });
+  } else {
+    blob = new Blob(Array.of(buf));
+  }
+  return Array.of("jpg", "jpeg", "png", "webp").includes(ext) ? await stripC2paBytes(blob) : blob;
+}
 
 $("save").onclick = async function() {
   var blob;
-  if (["jpg", "jpeg"].includes(S.ext)) {
-    var url = await toUrl(S.buf, "image/jpeg");
-    if (Object.keys(S.meta.gen).length === 0) {
-      url = piexif.remove(url);
+  if (Array.of("jpg", "jpeg").includes(S.ext)) {
+    if (Object.keys(S.meta.gen).length === 0 || !window.piexif) {
+      var segs = S.raw.jpgSegments.filter(function(s) { return s.marker < 0xE1 || s.marker > 0xEF; });
+      blob = new Blob(Array.of(new Uint8Array(Array.of(0xFF, 0xD8))).concat(segs.map(function(s) { return s.raw; })), { type: "image/jpeg" });
     } else {
+      var url = await toUrl(S.buf, "image/jpeg");
       var ex = S.raw.ex || { "0th": {}, "Exif": {}, "GPS": {}, "1st": {} };
       if (S.meta.gen.Artist || S.meta.gen.Author) ex["0th"][piexif.ImageIFD.Artist] = S.meta.gen.Artist || S.meta.gen.Author;
       if (S.meta.gen.Software) ex["0th"][piexif.ImageIFD.Software] = S.meta.gen.Software;
-      if (S.meta.gen.Make) ex["0th"][piexif.ImageIFD.Make] = S.meta.gen.Make;
-      if (S.meta.gen.Model) ex["0th"][piexif.ImageIFD.Model] = S.meta.gen.Model;
-      if (S.meta.gen.Copyright) ex["0th"][piexif.ImageIFD.Copyright] = S.meta.gen.Copyright;
       url = piexif.insert(piexif.dump(ex), piexif.remove(url));
+      blob = await (await fetch(url)).blob();
     }
-    blob = await (await fetch(url)).blob();
   } else if (S.ext === "png") {
-    var metaTypes = ["tEXt", "iTXt", "zTXt", "eXIf", "tIME"];
-    var keep = S.raw.chunks.filter(function(c) { return !metaTypes.includes(c.type); });
-    var iendIdx = keep.findIndex(function(c) { return c.type === "IEND"; });
-    var customChunks = [];
-    Object.entries(S.meta.gen).forEach(function(p) {
-      var k = p.at(0), v = p.at(1);
-      if (!k.startsWith("PNG_")) customChunks.push(buildPngTextChunk(k, v));
-    });
-    if (iendIdx !== -1) Array.prototype.splice.apply(keep, [iendIdx, 0].concat(customChunks));
-    var pngSig = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
-    blob = new Blob([pngSig].concat(keep.map(function(c) { return c.raw; })), { type: "image/png" });
+    var keep = S.raw.chunks.filter(function(c) { return !Array.of("tEXt", "iTXt", "zTXt", "eXIf", "tIME").includes(c.type); });
+    blob = new Blob(Array.of(new Uint8Array(Array.of(0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A))).concat(keep.map(function(c) { return c.raw; })), { type: "image/png" });
   } else if (S.ext === "webp") {
-    var keepW = S.raw.chunks.filter(function(c) { return !["EXIF", "XMP ", "ICCP"].includes(c.type); });
-    var body = new Blob(keepW.map(function(c) { return c.raw; }));
-    var head = new Uint8Array(12);
-    head.set([0x52, 0x49, 0x46, 0x46], 0);
-    new DataView(head.buffer).setUint32(4, 4 + body.size, true);
-    head.set([0x57, 0x45, 0x42, 0x50], 8);
-    blob = new Blob([head, body], { type: "image/webp" });
-  } else if (S.ext === "pdf") {
+    blob = buildWebpBlob(S.raw.chunks.filter(function(c) { return !Array.of("EXIF", "XMP ", "ICCP").includes(c.type); }));
+  } else if (S.ext === "pdf" && window.PDFLib && S.raw.pdf) {
     var out = await PDFLib.PDFDocument.create();
     var pages = await out.copyPages(S.raw.pdf, S.raw.pdf.getPageIndices());
     pages.forEach(function(p) { out.addPage(p); });
     var g = S.meta.gen;
     if (g.Title) out.setTitle(g.Title);
     if (g.Author) out.setAuthor(g.Author);
-    if (g.Subject) out.setSubject(g.Subject);
-    if (g.Keywords) out.setKeywords(g.Keywords.split(",").map(function(s) { return s.trim(); }));
     if (g.Creator) out.setCreator(g.Creator);
-    if (g.Producer) out.setProducer(g.Producer);
-    blob = new Blob([await out.save()], { type: "application/pdf" });
-  } else if (["docx", "xlsx", "pptx"].includes(S.ext)) {
+    if (g["PDF_Engine (Producer)"]) out.setProducer(g["PDF_Engine (Producer)"]);
+    blob = new Blob(Array.of(await out.save()), { type: "application/pdf" });
+  } else if (Array.of("docx", "xlsx", "pptx").includes(S.ext) && window.JSZip && S.raw.zip) {
     var zip = S.raw.zip;
     if (!S.meta.sig.length) Object.keys(zip.files).forEach(function(p) { if (p.startsWith("_xmlsignatures/")) zip.remove(p); });
     if (Object.keys(S.meta.gen).length === 0) {
       zip.remove("docProps/thumbnail.jpeg"); zip.remove("docProps/thumbnail.png"); zip.remove("docProps/custom.xml");
     }
-    for (var p of Object.keys(zip.files)) {
-      if (p.match(/media\/.*\.(jpg|jpeg)$/i)) {
-        var b64 = await zip.file(p).async("base64");
-        var clean = piexif.remove("data:image/jpeg;base64," + b64);
-        zip.file(p, clean.split(",").at(1), { base64: true });
-      }
-    }
-    if (zip.file("docProps/core.xml")) {
-      var g = S.meta.gen;
-      var coreXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
-        '<cp:coreProperties xmlns:cp="http://openxmlformats.org" xmlns:dc="http://purl.org">' +
-        '<dc:title>' + esc(g["core.xml:dc:title"] || g.Title || "") + '</dc:title>' +
-        '<dc:creator>' + esc(g["core.xml:dc:creator"] || g.Author || "") + '</dc:creator>' +
-        '<cp:lastModifiedBy>' + esc(g["core.xml:cp:lastModifiedBy"] || "") + '</cp:lastModifiedBy></cp:coreProperties>';
-      zip.file("docProps/core.xml", coreXml);
-    }
     blob = await zip.generateAsync({ type: "blob" });
   } else {
-    blob = new Blob([S.buf]);
+    blob = new Blob(Array.of(S.buf));
   }
-
-  if (S.meta.c2pa === null && ["jpg", "jpeg", "png", "webp"].includes(S.ext)) {
-    var arr = new Uint8Array(await blob.arrayBuffer());
-    var str = new TextDecoder("latin1").decode(arr);
-    var idx = str.indexOf("c2pa");
-    if (idx !== -1) {
-      arr.set([0x00, 0x00, 0x00, 0x00], idx);
-      blob = new Blob([arr], { type: blob.type });
-    }
-  }
-
+  if (S.meta.c2pa === null && Array.of("jpg", "jpeg", "png", "webp").includes(S.ext)) blob = await stripC2paBytes(blob);
   var a = document.createElement("a");
   a.href = URL.createObjectURL(blob);
   a.download = "clean_" + S.file.name;
   a.click();
 };
 
-function buildPngTextChunk(key, val) {
-  var data = new TextEncoder().encode(key + "\0" + val);
-  var chunk = new Uint8Array(12 + data.length);
-  new DataView(chunk.buffer).setUint32(0, data.length);
-  chunk.set([0x74, 0x45, 0x58, 0x74], 4);
-  chunk.set(data, 8);
-  return { type: "tEXt", raw: chunk };
+function buildWebpBlob(chunks) {
+  var body = new Blob(chunks.map(function(c) { return c.raw; }));
+  var head = new Uint8Array(12);
+  head.set(Array.of(0x52, 0x49, 0x46, 0x46), 0);
+  new DataView(head.buffer).setUint32(4, 4 + body.size, true);
+  head.set(Array.of(0x57, 0x45, 0x42, 0x50), 8);
+  return new Blob(Array.of(head, body), { type: "image/webp" });
+}
+
+async function stripC2paBytes(blob) {
+  var arr = new Uint8Array(await blob.arrayBuffer());
+  var idx = new TextDecoder("latin1").decode(arr).indexOf("c2pa");
+  if (idx !== -1) {
+    arr.set(Array.of(0x00, 0x00, 0x00, 0x00), idx);
+    return new Blob(Array.of(arr), { type: blob.type });
+  }
+  return blob;
 }
 
 function toUrl(b, m) {
   return new Promise(function(r) {
     var fr = new FileReader();
     fr.onload = function(e) { r(e.target.result); };
-    fr.readAsDataURL(new Blob([b], { type: m }));
+    fr.readAsDataURL(new Blob(Array.of(b), { type: m }));
   });
 }
 
