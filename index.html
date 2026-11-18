@@ -41,7 +41,7 @@
 <div class="wrap">
   <header>
     <div><h2 style="margin:0;">LocalMeta Forensic</h2><small style="color:var(--muted)">PDF Fonts/Engine • EXIF/XMP/Thumbnail • C2PA/AI • Office</small></div>
-    <div class="badge" id="libStatus">⏳ Инициализация...</div>
+    <div class="badge" id="libStatus">⏳ Подключение модулей...</div>
   </header>
   <label class="drop" id="drop" for="inp">
     <div style="font-size:16px; font-weight:600;">Выберите один или несколько файлов</div>
@@ -74,32 +74,30 @@
 var S = { file: null, buf: null, ext: "", tab: "gen", meta: { gen: {}, c2pa: null, sig: Array.of(), emb: Array.of() }, raw: {}, batchZip: null };
 function $(id) { return document.getElementById(id); }
 
-function loadWithTimeout(url, ms) {
+function loadLib(urls) {
   return new Promise(function(resolve) {
-    var done = false;
-    var timer = setTimeout(function() { if (!done) { done = true; resolve(false); } }, ms);
-    var s = document.createElement("script");
-    s.src = url;
-    s.onload = function() { if (!done) { done = true; clearTimeout(timer); resolve(true); } };
-    s.onerror = function() { if (!done) { done = true; clearTimeout(timer); resolve(false); } };
-    document.head.appendChild(s);
+    var i = 0;
+    function tryNext() {
+      if (i >= urls.length) return resolve(false);
+      var s = document.createElement("script");
+      s.src = urls.at(i); i = i + 1;
+      s.onload = function() { resolve(true); };
+      s.onerror = function() { s.remove(); tryNext(); };
+      document.head.appendChild(s);
+    }
+    tryNext();
   });
 }
 
-(async function initLibs() {
-  if (location.protocol === "file:" || !navigator.onLine) {
-    $("libStatus").textContent = "🔒 Автономный локальный движок готов";
-    return;
-  }
-  var res = await Promise.all(Array.of(
-    loadWithTimeout("https://cloudflare.com", 2500),
-    loadWithTimeout("https://cloudflare.com", 2500),
-    loadWithTimeout("https://cloudflare.com", 2500),
-    loadWithTimeout("https://cloudflare.com", 2500)
-  ));
+Promise.all(Array.of(
+  loadLib(Array.of("https://cloudflare.com", "https://jsdelivr.net")),
+  loadLib(Array.of("https://cloudflare.com", "https://jsdelivr.net")),
+  loadLib(Array.of("https://cloudflare.com", "https://jsdelivr.net")),
+  loadLib(Array.of("https://cloudflare.com", "https://jsdelivr.net"))
+)).then(function(res) {
   var ok = res.filter(Boolean).length;
-  $("libStatus").textContent = ok === 4 ? "🔒 Все модули активны" : "🔒 Автономный движок готов (" + ok + "/4 CDN)";
-})();
+  $("libStatus").textContent = ok === 4 ? "🔒 Все 4 модуля активны" : "⚠️ Модулей: " + ok + "/4 + нативный движок";
+});
 
 $("drop").ondragover = function(e) { e.preventDefault(); $("drop").classList.add("drag"); };
 $("drop").ondragleave = function() { $("drop").classList.remove("drag"); };
@@ -122,10 +120,7 @@ function routeFiles(list) {
 }
 
 async function handleBatch(list) {
-  if (!window.JSZip) {
-    alert("В автономном режиме без интернета пакетный ZIP недоступен. Выберите 1 файл для мгновенной очистки.");
-    return;
-  }
+  if (!window.JSZip) return alert("Дождитесь загрузки модулей (4/4) или проверьте интернет.");
   $("batchBox").style.display = "block";
   $("batchDownload").style.display = "none";
   $("batchLog").innerHTML = "Обработка " + list.length + " файлов...<br>";
@@ -163,12 +158,84 @@ async function handleSingle(file) {
   detectC2PA(bytes);
 
   if (Array.of("jpg", "jpeg", "png", "webp", "tif", "tiff").includes(S.ext)) await parseImage(bytes);
-  else if (S.ext === "pdf") await parsePDF(bytes);
+  else if (S.ext === "pdf") await parsePDFHybrid(bytes);
   else if (Array.of("docx", "xlsx", "pptx").includes(S.ext)) await parseOffice();
   else return alert("Формат ." + S.ext + " не поддерживается.");
 
   $("work").style.display = "grid";
   draw();
+}
+
+function decodePdfHex(hex) {
+  var clean = hex.replace(/\s+/g, "");
+  if (clean.startsWith("FEFF") || clean.startsWith("feff")) {
+    var out = "";
+    for (var i = 4; i + 3 < clean.length; i += 4) out += String.fromCharCode(parseInt(clean.slice(i, i + 4), 16));
+    return out;
+  }
+  var ascii = "";
+  for (var j = 0; j + 1 < clean.length; j += 2) {
+    var code = parseInt(clean.slice(j, j + 2), 16);
+    if (code >= 32) ascii += String.fromCharCode(code);
+  }
+  return ascii;
+}
+
+function readPdfDictValue(str, key) {
+  var pos = 0;
+  while (true) {
+    var idx = str.indexOf(key, pos);
+    if (idx === -1) return "";
+    var p = idx + key.length;
+    while (p < str.length && (str.charAt(p) === " " || str.charAt(p) === "\r" || str.charAt(p) === "\n")) p++;
+    if (str.charAt(p) === "(") {
+      var depth = 1, end = p + 1;
+      while (end < str.length && depth > 0) {
+        if (str.charAt(end) === "\\") { end += 2; continue; }
+        if (str.charAt(end) === "(") depth++;
+        else if (str.charAt(end) === ")") depth--;
+        end++;
+      }
+      var val = str.slice(p + 1, end - 1);
+      if (val.charCodeAt(0) === 254 && val.charCodeAt(1) === 255) {
+        var u16 = "";
+        for (var i = 2; i + 1 < val.length; i += 2) u16 += String.fromCharCode((val.charCodeAt(i) << 8) | val.charCodeAt(i + 1));
+        return u16;
+      }
+      return val;
+    } else if (str.charAt(p) === "<" && str.charAt(p + 1) !== "<") {
+      var hEnd = str.indexOf(">", p + 1);
+      if (hEnd !== -1) return decodePdfHex(str.slice(p + 1, hEnd));
+    }
+    pos = idx + key.length;
+  }
+}
+
+async function inflatePdfStreams(bytes, rawStr) {
+  if (typeof DecompressionStream === "undefined") return "";
+  var combined = "", pos = 0;
+  while (true) {
+    var sIdx = rawStr.indexOf("stream", pos);
+    if (sIdx === -1) break;
+    var start = sIdx + 6;
+    if (rawStr.charAt(start) === "\r") start++;
+    if (rawStr.charAt(start) === "\n") start++;
+    var eIdx = rawStr.indexOf("endstream", start);
+    if (eIdx === -1) break;
+    var chunk = bytes.slice(start, eIdx);
+    if (chunk.length > 2 && chunk.length < 300000) {
+      try {
+        var ds = new DecompressionStream("deflate");
+        var writer = ds.writable.getWriter();
+        writer.write(chunk);
+        writer.close();
+        var outBuf = await new Response(ds.readable).arrayBuffer();
+        combined += "\n" + new TextDecoder("latin1").decode(new Uint8Array(outBuf));
+      } catch (e) {}
+    }
+    pos = eIdx + 9;
+  }
+  return combined;
 }
 
 function scanPdfTokens(rawStr, key) {
@@ -192,34 +259,24 @@ function scanPdfTokens(rawStr, key) {
   return found;
 }
 
-function scanPdfParenVal(rawStr, key) {
-  var idx = rawStr.indexOf(key);
-  if (idx === -1) return "";
-  var p1 = rawStr.indexOf("(", idx + key.length);
-  if (p1 === -1 || p1 - idx > 20) return "";
-  var p2 = rawStr.indexOf(")", p1 + 1);
-  if (p2 === -1) return "";
-  return rawStr.slice(p1 + 1, p2);
-}
-
-async function parsePDF(bytes) {
+async function parsePDFHybrid(bytes) {
   var rawStr = new TextDecoder("latin1").decode(bytes);
+  var inflated = await inflatePdfStreams(bytes, rawStr);
+  var fullCorpus = rawStr + "\n" + inflated;
+
   var ver = rawStr.slice(0, 12).trim();
   if (ver.startsWith("%PDF-")) S.meta.gen["PDF_Version"] = ver.replace("%PDF-", "");
 
-  var producer = scanPdfParenVal(rawStr, "/Producer");
-  var creator = scanPdfParenVal(rawStr, "/Creator");
-  var cDate = scanPdfParenVal(rawStr, "/CreationDate");
-  var mDate = scanPdfParenVal(rawStr, "/ModDate");
-  var title = scanPdfParenVal(rawStr, "/Title");
-  var author = scanPdfParenVal(rawStr, "/Author");
-
-  if (title) S.meta.gen["Title"] = title;
-  if (author) S.meta.gen["Author"] = author;
-  if (creator) S.meta.gen["Creator"] = creator;
-  if (producer) S.meta.gen["PDF_Engine (Producer)"] = producer;
-  if (cDate) S.meta.gen["Creation_Date"] = cDate;
-  if (mDate) S.meta.gen["Modification_Date"] = mDate;
+  var fields = Array.of(
+    Array.of("Title", "/Title"), Array.of("Author", "/Author"), Array.of("Subject", "/Subject"),
+    Array.of("Creator", "/Creator"), Array.of("PDF_Engine (Producer)", "/Producer"),
+    Array.of("Creation_Date", "/CreationDate"), Array.of("Modification_Date", "/ModDate")
+  );
+  for (var i = 0; i < fields.length; i++) {
+    var f = fields.at(i);
+    var v = readPdfDictValue(fullCorpus, f.at(1));
+    if (v) S.meta.gen[f.at(0)] = v;
+  }
 
   if (window.PDFLib) {
     try {
@@ -231,20 +288,20 @@ async function parsePDF(bytes) {
       if (pdf.getProducer()) S.meta.gen["PDF_Engine (Producer)"] = pdf.getProducer();
       if (pdf.getCreationDate()) S.meta.gen["Creation_Date"] = pdf.getCreationDate().toISOString();
       if (pdf.getModificationDate()) S.meta.gen["Modification_Date"] = pdf.getModificationDate().toISOString();
+      $("prev").innerHTML = "<div class='note'>PDF (" + pdf.getPageCount() + " стр.). Все поля и шрифты извлечены.</div>";
     } catch (e) {}
   }
 
-  var fonts = scanPdfTokens(rawStr, "/BaseFont").concat(scanPdfTokens(rawStr, "/FontName"));
+  var fonts = scanPdfTokens(fullCorpus, "/BaseFont").concat(scanPdfTokens(fullCorpus, "/FontName"));
   var uniqFonts = Array.from(new Set(fonts));
   if (uniqFonts.length) S.meta.emb.push("Встроенные шрифты (" + uniqFonts.length + "): " + uniqFonts.join(", "));
 
   var eofCount = rawStr.split("%%EOF").length - 1;
-  if (eofCount > 1) S.meta.emb.push("Инкрементальных версий (%%EOF): " + eofCount + " (удалятся при сохранении)");
-  if (rawStr.includes("/JavaScript") || rawStr.includes("/JS")) S.meta.emb.push("⚠️ Обнаружен встроенный JavaScript!");
-  if (rawStr.includes("/EmbeddedFile")) S.meta.emb.push("⚠️ Обнаружены скрытые вложенные файлы (/EmbeddedFile)");
-  if (rawStr.includes("/URI")) S.meta.emb.push("В документе присутствуют внешние ссылки (/URI)");
-  if (rawStr.includes("/Type /Sig") || rawStr.includes("/Type/Sig")) S.meta.sig.push({ signer: "Подпись PDF", raw: "Обнаружен словарь цифровой подписи /Sig" });
-  $("prev").innerHTML = "<div class='note'>PDF разобран. Все поля, шрифты и скрытые объекты извлечены.</div>";
+  if (eofCount > 1) S.meta.emb.push("Инкрементальных версий (%%EOF): " + eofCount);
+  if (fullCorpus.includes("/JavaScript") || fullCorpus.includes("/JS")) S.meta.emb.push("⚠️ Обнаружен встроенный JavaScript!");
+  if (fullCorpus.includes("/EmbeddedFile")) S.meta.emb.push("⚠️ Обнаружены вложенные файлы (/EmbeddedFile)");
+  if (fullCorpus.includes("/URI")) S.meta.emb.push("В документе есть внешние ссылки (/URI)");
+  if (fullCorpus.includes("/Type /Sig") || fullCorpus.includes("/Type/Sig")) S.meta.sig.push({ signer: "Подпись PDF", raw: "Словарь /Sig" });
 }
   function detectC2PA(bytes) {
   var txt = new TextDecoder("latin1").decode(bytes);
@@ -264,6 +321,7 @@ async function parseImage(bytes) {
     var url = await toUrl(S.buf, "image/" + (S.ext === "jpg" ? "jpeg" : S.ext));
     $("prev").innerHTML = "<strong style='font-size:12px;'>Предпросмотр:</strong><br><img src='" + url + "'>";
   }
+
   if (window.exifr) {
     try {
       var parsed = await exifr.parse(S.buf, { xmp: true, iptc: true, icc: true, jfif: true, ihdr: true });
@@ -276,7 +334,7 @@ async function parseImage(bytes) {
       var gps = await exifr.gps(S.buf);
       if (gps && gps.latitude) S.meta.emb.push("📍 GPS координаты: " + gps.latitude.toFixed(6) + ", " + gps.longitude.toFixed(6));
       var thumb = await exifr.thumbnailUrl(S.buf);
-      if (thumb) S.meta.emb.push("⚠️ Внутри EXIF зашита скрытая миниатюра исходного снимка (будет удалена при сохранении).");
+      if (thumb) S.meta.emb.push("⚠️ Внутри EXIF зашита скрытая миниатюра исходного снимка.");
     } catch (e) {}
   }
 
@@ -335,7 +393,7 @@ function extractWebpChunks(buf, bytes) {
 }
 
 async function parseOffice() {
-  if (!window.JSZip) return alert("Для документов Office нужна библиотека JSZip (откройте файл через интернет-браузер).");
+  if (!window.JSZip) return alert("Модуль JSZip еще загружается, подождите пару секунд.");
   var zip = await JSZip.loadAsync(S.buf);
   S.raw.zip = zip;
   var parser = new DOMParser();
