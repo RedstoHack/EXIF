@@ -1,0 +1,425 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>LocalMeta — Локальный инспектор и очиститель метаданных</title>
+<style>
+  :root {
+    --bg: #0f172a; --surface: #1e293b; --surface-hover: #334155;
+    --text: #f8fafc; --muted: #94a3b8; --primary: #3b82f6;
+    --danger: #ef4444; --success: #10b981; --border: #334155;
+  }
+  * { box-sizing: border-box; font-family: system-ui, -apple-system, sans-serif; }
+  body { background: var(--bg); color: var(--text); margin: 0; padding: 16px; display: flex; justify-content: center; }
+  .wrap { max-width: 1050px; width: 100%; }
+  header { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 10px; border-bottom: 1px solid var(--border); padding-bottom: 14px; margin-bottom: 18px; }
+  .badge { background: rgba(16,185,129,0.15); color: var(--success); padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 600; }
+  .drop { border: 2px dashed var(--border); border-radius: 12px; padding: 36px 16px; text-align: center; background: var(--surface); cursor: pointer; }
+  .drop:hover, .drop.drag { border-color: var(--primary); background: var(--surface-hover); }
+  .grid { display: none; grid-template-columns: 300px 1fr; gap: 18px; margin-top: 18px; }
+  @media (max-width: 800px) { .grid { grid-template-columns: 1fr; } }
+  .box { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; }
+  .row { display: grid; grid-template-columns: 180px 1fr 34px; gap: 8px; margin-bottom: 8px; align-items: center; }
+  input, textarea { background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 10px; border-radius: 6px; width: 100%; font-size: 13px; }
+  textarea { min-height: 140px; font-family: monospace; resize: vertical; }
+  button { cursor: pointer; border: none; border-radius: 6px; padding: 10px 14px; font-weight: 600; }
+  .btn-primary { background: var(--primary); color: #fff; width: 100%; margin-top: 10px; }
+  .btn-danger { background: var(--danger); color: #fff; width: 100%; margin-top: 10px; }
+  .btn-del { background: rgba(239,68,68,0.2); color: var(--danger); padding: 8px; }
+  .tabs { display: flex; gap: 8px; margin-bottom: 14px; border-bottom: 1px solid var(--border); padding-bottom: 10px; flex-wrap: wrap; }
+  .tab { background: transparent; border: 1px solid var(--border); color: var(--muted); padding: 6px 12px; font-size: 13px; }
+  .tab.active { background: var(--primary); color: #fff; border-color: var(--primary); }
+  .note { background: rgba(245,158,11,0.15); border-left: 4px solid #f59e0b; padding: 10px 12px; font-size: 13px; margin-bottom: 12px; border-radius: 4px; }
+  .prev-wrap img { max-width: 100%; max-height: 200px; object-fit: contain; border-radius: 6px; margin-top: 10px; border: 1px solid var(--border); background: #000; }
+  .modal { display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.75); align-items: center; justify-content: center; z-index: 99; }
+  .modal-box { background: var(--surface); padding: 24px; border-radius: 10px; max-width: 380px; width: 90%; border: 1px solid var(--border); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div><h2 style="margin:0;">LocalMeta Inspector & Cleaner</h2><small style="color:var(--muted)">JPEG • PNG • WebP • TIFF • C2PA/AI • PDF • Office</small></div>
+    <div class="badge">🔒 100% Локально в браузере</div>
+  </header>
+  <div class="drop" id="drop">
+    <h3 style="margin-top:0;">Перетащите файл сюда или нажмите для выбора</h3>
+    <p style="color:var(--muted); margin-bottom:0; font-size:13px;">PNG и WebP очищаются без повторного сжатия и потери качества.</p>
+    <input type="file" id="inp" hidden>
+  </div>
+  <div class="grid" id="work">
+    <div class="box">
+      <h4 style="margin-top:0;">Информация о файле</h4>
+      <div id="info" style="font-size:13px; color:var(--muted); line-height:1.6;"></div>
+      <div class="prev-wrap" id="prev" style="margin-top:12px;"></div>
+      <button class="btn-danger" id="purge">🧹 Удалить ВСЕ метаданные</button>
+      <button class="btn-primary" id="save">💾 Скачать обработанный файл</button>
+    </div>
+    <div class="box">
+      <div class="tabs" id="tabs"></div>
+      <div id="banner"></div>
+      <div id="fields"></div>
+      <button class="tab" id="add" style="margin-top:12px;">+ Добавить / заполнить поле</button>
+    </div>
+  </div>
+</div>
+<div class="modal" id="pwdModal">
+  <div class="modal-box">
+    <h3 style="margin-top:0;">Защищенный PDF</h3>
+    <p style="font-size:13px; color:var(--muted);">Введите пароль для открытия (после сохранения защита будет снята):</p>
+    <input type="password" id="pwdInput" placeholder="Пароль..." style="margin-bottom:14px;">
+    <button class="btn-primary" id="pwdBtn">Открыть и расшифровать</button>
+  </div>
+</div>
+<script>
+[
+  "https://cloudflare.com",
+  "https://unpkg.com",
+  "https://cloudflare.com"
+].forEach(function(src) {
+  var s = document.createElement("script"); s.src = src; document.head.appendChild(s);
+});
+
+var S = { file: null, buf: null, ext: "", tab: "gen", meta: { gen: {}, c2pa: null, sig: [], emb: [] }, raw: {} };
+function $(id) { return document.getElementById(id); }
+
+$("drop").onclick = function() { $("inp").click(); };
+$("drop").ondragover = function(e) { e.preventDefault(); $("drop").classList.add("drag"); };
+$("drop").ondragleave = function() { $("drop").classList.remove("drag"); };
+$("drop").ondrop = function(e) { e.preventDefault(); $("drop").classList.remove("drag"); if (e.dataTransfer.files) load(e.dataTransfer.files); };
+$("inp").onchange = function(e) { if (e.target.files) load(e.target.files); };
+
+async function load(file) {
+  if (!file) return;
+  S.file = file;
+  S.buf = await file.arrayBuffer();
+  S.ext = file.name.split(".").pop().toLowerCase();
+  S.meta = { gen: {}, c2pa: null, sig: [], emb: [] };
+  S.raw = {};
+
+  $("info").innerHTML = "<div><b>Имя:</b> " + esc(file.name) + "</div><div><b>Размер:</b> " + (file.size/1024).toFixed(2) + " KB</div><div><b>Тип:</b> " + S.ext.toUpperCase() + "</div>";
+  $("prev").innerHTML = "";
+
+  var bytes = new Uint8Array(S.buf);
+  detectC2PA(bytes);
+
+  try {
+    if (["jpg", "jpeg"].includes(S.ext)) await parseJPEG();
+    else if (S.ext === "png") await parsePNG(bytes);
+    else if (S.ext === "webp") await parseWebP(bytes);
+    else if (["tif", "tiff"].includes(S.ext)) await parseTIFF(bytes);
+    else if (S.ext === "pdf") await parsePDF(bytes, null);
+    else if (["docx", "xlsx", "pptx"].includes(S.ext)) await parseOffice();
+    else return alert("Неподдерживаемый формат.");
+
+    $("work").style.display = "grid";
+    draw();
+  } catch (err) {
+    alert("Ошибка разбора: " + err.message);
+  }
+}
+
+function detectC2PA(bytes) {
+  var txt = new TextDecoder("latin1").decode(bytes);
+  var idx = txt.indexOf("c2pa");
+  if (idx === -1) return;
+  var start = Math.max(0, idx - 64);
+  var end = Math.min(bytes.length, idx + 8192);
+  var sliceTxt = new TextDecoder("utf-8", { fatal: false }).decode(bytes.slice(start, end));
+  var jsonBlocks = sliceTxt.match(/\{[^{}]*"(?:claim_generator|assertions|signature_info|alg|issuer|title|softwareAgent|actions|device)"[^{}]*\}/g);
+  S.meta.c2pa = {
+    text: jsonBlocks ? jsonBlocks.join("\n---\n") : sliceTxt.replace(/[^\x20-\x7E\u0400-\u04FF]/g, " ").replace(/\s{2,}/g, "\n")
+  };
+}
+
+async function parseJPEG() {
+  var url = await toUrl(S.buf, "image/jpeg");
+  $("prev").innerHTML = "<strong style='font-size:12px;'>Предпросмотр:</strong><br><img src='" + url + "'>";
+  try {
+    var ex = piexif.load(url);
+    S.raw.ex = ex;
+    ["0th", "Exif", "GPS", "1st"].forEach(function(ifd) {
+      Object.entries(ex[ifd] || {}).forEach(function(pair) {
+        var tag = pair, val = pair;
+        var name = (piexif.TAGS[ifd][tag] && piexif.TAGS[ifd][tag].name) || ("Tag_" + tag);
+        S.meta.gen[ifd + ":" + name] = typeof val === "object" ? JSON.stringify(val) : String(val);
+      });
+    });
+  } catch (e) {
+    S.raw.ex = { "0th": {}, "Exif": {}, "GPS": {}, "1st": {} };
+  }
+}
+
+async function parsePNG(bytes) {
+  var url = await toUrl(S.buf, "image/png");
+  $("prev").innerHTML = "<strong style='font-size:12px;'>Предпросмотр (без пересжатия):</strong><br><img src='" + url + "'>";
+  var view = new DataView(S.buf), o = 8;
+  S.raw.chunks = [];
+  while (o < view.byteLength) {
+    var len = view.getUint32(o);
+    var type = String.fromCharCode.apply(null, bytes.slice(o + 4, o + 8));
+    var data = bytes.slice(o + 8, o + 8 + len);
+    S.raw.chunks.push({ type: type, raw: bytes.slice(o, o + 12 + len), data: data });
+    if (["tEXt", "iTXt", "zTXt", "eXIf", "tIME"].includes(type)) {
+      S.meta.gen[type + "_" + o] = new TextDecoder("utf-8", { fatal: false }).decode(data).replace(/\0/g, ": ");
+    }
+    o += 12 + len;
+  }
+}
+
+async function parseWebP(bytes) {
+  var url = await toUrl(S.buf, "image/webp");
+  $("prev").innerHTML = "<strong style='font-size:12px;'>Предпросмотр (без пересжатия):</strong><br><img src='" + url + "'>";
+  var view = new DataView(S.buf), o = 12;
+  S.raw.chunks = [];
+  while (o < view.byteLength) {
+    var type = String.fromCharCode.apply(null, bytes.slice(o, o + 4));
+    var len = view.getUint32(o + 4, true);
+    var pad = len + (len % 2);
+    var data = bytes.slice(o + 8, o + 8 + len);
+    S.raw.chunks.push({ type: type, raw: bytes.slice(o, o + 8 + pad), data: data });
+    if (["EXIF", "XMP ", "ICCP"].includes(type)) {
+      S.meta.gen[type.trim()] = new TextDecoder("utf-8", { fatal: false }).decode(data);
+    }
+    o += 8 + pad;
+  }
+}
+
+async function parseTIFF(bytes) {
+  $("prev").innerHTML = "<div class='note'>TIFF загружен. Выполнен поиск строковых тегов и C2PA.</div>";
+  var strs = new TextDecoder("utf-8", { fatal: false }).decode(bytes).match(/[A-Za-z0-9_.\-: /]{6,}/g) || [];
+  S.meta.gen["TIFF_Strings"] = strs.slice(0, 30).join(" | ");
+}
+
+async function parsePDF(bytes, password) {
+  try {
+    var opts = { ignoreEncryption: true };
+    if (password) opts.password = password;
+    var pdf = await PDFLib.PDFDocument.load(S.buf, opts);
+    S.raw.pdf = pdf;
+    S.meta.gen = {
+      Title: pdf.getTitle() || "", Author: pdf.getAuthor() || "", Subject: pdf.getSubject() || "",
+      Keywords: pdf.getKeywords() || "", Creator: pdf.getCreator() || "", Producer: pdf.getProducer() || "",
+      CreationDate: pdf.getCreationDate() ? pdf.getCreationDate().toISOString() : "",
+      ModificationDate: pdf.getModificationDate() ? pdf.getModificationDate().toISOString() : ""
+    };
+    var rawStr = new TextDecoder("latin1").decode(bytes);
+    var eofCount = (rawStr.match(/%%EOF/g) || []).length;
+    if (eofCount > 1) S.meta.emb.push("Найдено " + eofCount + " версий документа (будут удалены при сохранении).");
+    var xmp = rawStr.match(/<x:xmpmeta[\s\S]*?<\/x:xmpmeta>/);
+    if (xmp) S.meta.gen["XMP_Metadata"] = xmp;
+    var sigs = rawStr.match(/\/Type\s*\/Sig[\s\S]{0,600}/g) || [];
+    sigs.forEach(function(s, i) {
+      var signer = (s.match(/\/Name\s*\(([^)]+)\)/) || []) || ("Подпись PDF #" + (i + 1));
+      S.meta.sig.push({ signer: signer, raw: s.slice(0, 400) });
+    });
+    var fonts = Array.from(new Set(rawStr.match(/\/BaseFont\s*\/([A-Za-z0-9+\-]+)/g) || []));
+    if (fonts.length) S.meta.emb.push("Шрифты: " + fonts.map(function(f) { return f.replace("/BaseFont", "").trim(); }).join(", "));
+    $("prev").innerHTML = "<div class='note'>PDF (" + pdf.getPageCount() + " стр.). Ограничения сняты автоматически.</div>";
+  } catch (e) {
+    if (e.message.toLowerCase().includes("password") || e.message.toLowerCase().includes("encrypted")) $("pwdModal").style.display = "flex";
+    else throw e;
+  }
+}
+
+$("pwdBtn").onclick = async function() {
+  var pwd = $("pwdInput").value;
+  $("pwdModal").style.display = "none";
+  await parsePDF(new Uint8Array(S.buf), pwd);
+  $("work").style.display = "grid";
+  draw();
+};
+
+async function parseOffice() {
+  var zip = await JSZip.loadAsync(S.buf);
+  S.raw.zip = zip;
+  var parser = new DOMParser();
+  for (var xmlPath of ["docProps/core.xml", "docProps/app.xml", "docProps/custom.xml"]) {
+    if (zip.file(xmlPath)) {
+      var doc = parser.parseFromString(await zip.file(xmlPath).async("string"), "application/xml");
+      Array.from(doc.documentElement.children).forEach(function(n) {
+        S.meta.gen[xmlPath.split("/") + ":" + n.nodeName] = n.textContent;
+      });
+    }
+  }
+  for (var path of Object.keys(zip.files)) {
+    if (path.endsWith(".rels") || path.includes("settings.xml") || path.includes("printerSettings")) {
+      var paths = (await zip.file(path).async("string")).match(/[A-Za-z]:\\[^"<]+|\\\\[^"<]+/g);
+      if (paths) S.meta.gen["Path_" + path] = paths.join("; ");
+    }
+    if (path.includes("thumbnail")) {
+      $("prev").innerHTML = "<strong style='font-size:12px;'>Миниатюра первой страницы:</strong><br><img src='" + URL.createObjectURL(await zip.file(path).async("blob")) + "'>";
+    }
+    if (path.match(/media\/.*\.(jpg|jpeg|png|webp)$/i)) S.meta.emb.push("Встроенное фото: " + path + " (EXIF будет очищен)");
+    if (path.startsWith("_xmlsignatures/")) {
+      var sigXml = await zip.file(path).async("string");
+      var subj = (sigXml.match(/<X509SubjectName>([^<]+)<\/X509SubjectName>/) || []) || path;
+      S.meta.sig.push({ signer: subj, raw: sigXml.slice(0, 450) });
+    }
+  }
+}
+  function draw() {
+  var list = [
+    ["gen", "Основные (" + Object.keys(S.meta.gen).length + ")"],
+    ["c2pa", "C2PA / ИИ " + (S.meta.c2pa ? "⚠️" : "")],
+    ["sig", "Подписи (" + S.meta.sig.length + ")"],
+    ["emb", "Встроенное (" + S.meta.emb.length + ")"]
+  ];
+  $("tabs").innerHTML = list.map(function(t) {
+    return "<button class='tab " + (S.tab === t ? "active" : "") + "' onclick=\"S.tab='" + t + "';draw()\">" + t + "</button>";
+  }).join("");
+  $("banner").innerHTML = "";
+  $("add").style.display = S.tab === "gen" ? "inline-block" : "none";
+
+  if (S.tab === "gen") {
+    var html = Object.entries(S.meta.gen).map(function(pair) {
+      var k = esc(pair), v = esc(pair);
+      return "<div class='row'>" +
+        "<input value='" + k + "' readonly style='color:var(--muted)'>" +
+        "<input value='" + v + "' onchange=\"S.meta.gen['" + k + "']=this.value\">" +
+        "<button class='btn-del' onclick=\"delete S.meta.gen['" + k + "'];draw()\">✕</button>" +
+      "</div>";
+    }).join("");
+    $("fields").innerHTML = html || "<p style='color:var(--muted);font-size:13px;'>Метаданные отсутствуют или полностью очищены.</p>";
+  } else if (S.tab === "c2pa") {
+    $("banner").innerHTML = "<div class='note'>Инструмент не проверяет подпись C2PA: данные отображаются так, как записаны в файле. Вы можете отредактировать любую строку или удалить весь блок.</div>";
+    $("fields").innerHTML = S.meta.c2pa
+      ? "<textarea onchange='S.meta.c2pa.text=this.value'>" + esc(S.meta.c2pa.text) + "</textarea><button class='btn-danger' onclick='S.meta.c2pa=null;draw()'>Удалить C2PA полностью</button>"
+      : "<p style='color:var(--muted);font-size:13px;'>Учетные данные C2PA / метки ИИ не обнаружены.</p>";
+  } else if (S.tab === "sig") {
+    $("banner").innerHTML = "<div class='note'>Инструмент не проверяет подпись: любое имя может написать кто угодно. После любых изменений подпись перестает быть действительной.</div>";
+    $("fields").innerHTML = S.meta.sig.map(function(s, i) {
+      return "<div class='box' style='margin-bottom:10px;background:var(--bg);'>" +
+        "<div style='margin-bottom:6px;'><small>Подписант:</small><input value='" + esc(s.signer) + "' onchange='S.meta.sig[" + i + "].signer=this.value'></div>" +
+        "<div style='margin-bottom:6px;'><small>Сертификат / Данные:</small><textarea onchange='S.meta.sig[" + i + "].raw=this.value'>" + esc(s.raw) + "</textarea></div>" +
+        "<button class='btn-danger' onclick='S.meta.sig.splice(" + i + ",1);draw()'>Удалить подпись</button></div>";
+    }).join("") || "<p style='color:var(--muted);font-size:13px;'>Цифровые подписи не обнаружены.</p>";
+  } else {
+    $("fields").innerHTML = S.meta.emb.map(function(x) { return "<div class='note'>" + esc(x) + "</div>"; }).join("") || "<p style='color:var(--muted);font-size:13px;'>Встроенные объекты не найдены.</p>";
+  }
+}
+
+$("add").onclick = function() {
+  var k = prompt("Введите название поля (например: Author, Title, Software, Artist):");
+  if (k) { S.meta.gen[k] = ""; draw(); }
+};
+
+$("purge").onclick = function() {
+  S.meta.gen = {}; S.meta.c2pa = null; S.meta.sig = []; draw();
+};
+
+$("save").onclick = async function() {
+  var blob;
+  if (["jpg", "jpeg"].includes(S.ext)) {
+    var url = await toUrl(S.buf, "image/jpeg");
+    if (Object.keys(S.meta.gen).length === 0) {
+      url = piexif.remove(url);
+    } else {
+      var ex = S.raw.ex || { "0th": {}, "Exif": {}, "GPS": {}, "1st": {} };
+      var map0th = { "0th:Artist": piexif.ImageIFD.Artist, "0th:Software": piexif.ImageIFD.Software, "0th:Make": piexif.ImageIFD.Make, "0th:Model": piexif.ImageIFD.Model, "0th:DateTime": piexif.ImageIFD.DateTime, "0th:Copyright": piexif.ImageIFD.Copyright };
+      Object.entries(map0th).forEach(function(p) {
+        if (S.meta.gen[p] !== undefined) ex["0th"][p] = S.meta.gen[p]; else delete ex["0th"][p];
+      });
+      if (S.meta.gen["Author"]) ex["0th"][piexif.ImageIFD.Artist] = S.meta.gen["Author"];
+      if (S.meta.gen["Software"]) ex["0th"][piexif.ImageIFD.Software] = S.meta.gen["Software"];
+      url = piexif.insert(piexif.dump(ex), piexif.remove(url));
+    }
+    blob = await (await fetch(url)).blob();
+  } else if (S.ext === "png") {
+    var metaTypes = ["tEXt", "iTXt", "zTXt", "eXIf", "tIME"];
+    var keep = S.raw.chunks.filter(function(c) { return !metaTypes.includes(c.type); });
+    var iendIdx = keep.findIndex(function(c) { return c.type === "IEND"; });
+    var customChunks = [];
+    Object.entries(S.meta.gen).forEach(function(p) {
+      if (!p.startsWith("tEXt_") && !p.startsWith("iTXt_") && !p.startsWith("eXIf_")) customChunks.push(buildPngTextChunk(p, p));
+    });
+    if (iendIdx !== -1) Array.prototype.splice.apply(keep, [iendIdx, 0].concat(customChunks));
+    var pngSig = new Uint8Array([0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A]);
+    blob = new Blob([pngSig].concat(keep.map(function(c) { return c.raw; })), { type: "image/png" });
+  } else if (S.ext === "webp") {
+    var keepW = S.raw.chunks.filter(function(c) { return !["EXIF", "XMP ", "ICCP"].includes(c.type); });
+    var body = new Blob(keepW.map(function(c) { return c.raw; }));
+    var head = new Uint8Array(12);
+    head.set([0x52, 0x49, 0x46, 0x46], 0);
+    new DataView(head.buffer).setUint32(4, 4 + body.size, true);
+    head.set([0x57, 0x45, 0x42, 0x50], 8);
+    blob = new Blob([head, body], { type: "image/webp" });
+  } else if (S.ext === "pdf") {
+    var out = await PDFLib.PDFDocument.create();
+    var pages = await out.copyPages(S.raw.pdf, S.raw.pdf.getPageIndices());
+    pages.forEach(function(p) { out.addPage(p); });
+    var g = S.meta.gen;
+    if (g.Title) out.setTitle(g.Title);
+    if (g.Author) out.setAuthor(g.Author);
+    if (g.Subject) out.setSubject(g.Subject);
+    if (g.Keywords) out.setKeywords(g.Keywords.split(",").map(function(s) { return s.trim(); }));
+    if (g.Creator) out.setCreator(g.Creator);
+    if (g.Producer) out.setProducer(g.Producer);
+    blob = new Blob([await out.save()], { type: "application/pdf" });
+  } else if (["docx", "xlsx", "pptx"].includes(S.ext)) {
+    var zip = S.raw.zip;
+    if (!S.meta.sig.length) Object.keys(zip.files).forEach(function(p) { if (p.startsWith("_xmlsignatures/")) zip.remove(p); });
+    if (Object.keys(S.meta.gen).length === 0) {
+      zip.remove("docProps/thumbnail.jpeg"); zip.remove("docProps/thumbnail.png"); zip.remove("docProps/custom.xml");
+    }
+    for (var p of Object.keys(zip.files)) {
+      if (p.match(/media\/.*\.(jpg|jpeg)$/i)) {
+        var clean = piexif.remove("data:image/jpeg;base64," + await zip.file(p).async("base64"));
+        zip.file(p, clean.split(","), { base64: true });
+      }
+    }
+    if (zip.file("docProps/core.xml")) {
+      var g = S.meta.gen;
+      var coreXml = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+        '<cp:coreProperties xmlns:cp="http://openxmlformats.org" xmlns:dc="http://purl.org">' +
+        '<dc:title>' + esc(g["core.xml:dc:title"] || g.Title || "") + '</dc:title>' +
+        '<dc:creator>' + esc(g["core.xml:dc:creator"] || g.Author || "") + '</dc:creator>' +
+        '<cp:lastModifiedBy>' + esc(g["core.xml:cp:lastModifiedBy"] || "") + '</cp:lastModifiedBy></cp:coreProperties>';
+      zip.file("docProps/core.xml", coreXml);
+    }
+    blob = await zip.generateAsync({ type: "blob" });
+  } else {
+    blob = new Blob([S.buf]);
+  }
+
+  if (S.meta.c2pa === null && ["jpg", "jpeg", "png", "webp"].includes(S.ext)) {
+    var arr = new Uint8Array(await blob.arrayBuffer());
+    var str = new TextDecoder("latin1").decode(arr);
+    var idx = str.indexOf("c2pa");
+    if (idx !== -1) {
+      arr.set([0x00, 0x00, 0x00, 0x00], idx);
+      blob = new Blob([arr], { type: blob.type });
+    }
+  }
+
+  var a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "clean_" + S.file.name;
+  a.click();
+};
+
+function buildPngTextChunk(key, val) {
+  var data = new TextEncoder().encode(key + "\0" + val);
+  var chunk = new Uint8Array(12 + data.length);
+  new DataView(chunk.buffer).setUint32(0, data.length);
+  chunk.set([0x74, 0x45, 0x58, 0x74], 4);
+  chunk.set(data, 8);
+  return { type: "tEXt", raw: chunk };
+}
+
+function toUrl(b, m) {
+  return new Promise(function(r) {
+    var fr = new FileReader();
+    fr.onload = function(e) { r(e.target.result); };
+    fr.readAsDataURL(new Blob([b], { type: m }));
+  });
+}
+
+function esc(s) {
+  return String(s).replace(/[&<>"']/g, function(m) {
+    return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[m];
+  });
+}
+</script>
+</body>
+</html>
